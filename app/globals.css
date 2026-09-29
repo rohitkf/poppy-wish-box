@@ -1,0 +1,199 @@
+@import "tailwindcss";
+
+/* Design tokens — from the "Ours — MVP screens" canvas. */
+:root {
+  --bg: #f6f1ea;
+  --surface: #ffffff;
+  --sunken: #ede6dc;
+  --sidebar: #efe8de;
+  --ink: #1f1b16;
+  --ink-2: #5e554c;
+  --ink-3: #6b6259;
+  --line: #e6ded2;
+  --line-2: #d6cbbd;
+  --line-soft: #efe8de;
+  --line-strong: #e0d7ca;
+  --dash: #c9bfb1;
+  --radio: #8e857a;
+  --clay: #b4532a;
+  --clay-ink: #9a4322;
+  --on-clay: #ffffff;
+  --teal: #2f5d62;
+  --teal-text: #2f5d62;
+  --teal-soft: #d6e4e2;
+  --teal-ink: #234a4e;
+  --highlight: #dde9e6;
+  --online: #2f8f5b;
+  --danger: #a33a1e;
+  --danger-line: #e3c3b6;
+  --bar: #1f1b16;
+  --bar-ink: #ffffff;
+  --bar-chip: #3a332b;
+  --bar-chip-ink: #f1e8dc;
+  --bar-muted: #b3a898;
+  --toast-accent: #f2b596;
+  --pill-idea-bg: #ede6dc;
+  --pill-idea-ink: #4a423a;
+  --shadow: 0 10px 30px rgba(31, 27, 22, 0.25);
+
+  --tile-clay-bg: #f4dfd3; --tile-clay-fg: #9a4322;
+  --tile-teal-bg: #d6e4e2; --tile-teal-fg: #2f5d62;
+  --tile-plum-bg: #e9dce8; --tile-plum-fg: #6e3e6a;
+  --tile-olive-bg: #e4e2cf; --tile-olive-fg: #5c5a2a;
+  --tile-sky-bg: #dce4f0; --tile-sky-fg: #2e4f7a;
+  --tile-rose-bg: #f2dadd; --tile-rose-fg: #8a3344;
+
+  color-scheme: light;
+}
+
+
+:root[data-theme="dark"] {
+  --bg: #17140f;
+  --surface: #221e18;
+  --sunken: #2c271f;
+  --sidebar: #1c1813;
+  --ink: #f3ece2;
+  --ink-2: #cbc1b3;
+  --ink-3: #aca193;
+  --line: #36302a;
+  --line-2: #4a423a;
+  --line-soft: #2e2923;
+  --line-strong: #36302a;
+  --dash: #5a5147;
+  --radio: #8e857a;
+  --clay: #b4532a;
+  --clay-ink: #f0a07c;
+  --teal: #2f5d62;
+  --teal-text: #8fc3c7;
+  --teal-soft: #1e3336;
+  --teal-ink: #b5dcdf;
+  --highlight: #1d3134;
+  --online: #4cc387;
+  --danger: #f08a6c;
+  --danger-line: #6b3527;
+  --bar: #0e0c09;
+  --bar-chip: #2c271f;
+  --pill-idea-bg: #2c271f;
+  --pill-idea-ink: #d9cfc2;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+
+  --tile-clay-bg: #3a241a; --tile-clay-fg: #f0a07c;
+  --tile-teal-bg: #1e3336; --tile-teal-fg: #8fc3c7;
+  --tile-plum-bg: #33243a; --tile-plum-fg: #d5a9d0;
+  --tile-olive-bg: #2f2e1c; --tile-olive-fg: #cfcb8e;
+  --tile-sky-bg: #1d2838; --tile-sky-fg: #9db8e0;
+  --tile-rose-bg: #3a1f24; --tile-rose-fg: #e7a1ab;
+
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-sidebar: var(--sidebar);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-line-soft: var(--line-soft);
+  --color-line-strong: var(--line-strong);
+  --color-dash: var(--dash);
+  --color-radio: var(--radio);
+  --color-clay: var(--clay);
+  --color-clay-ink: var(--clay-ink);
+  --color-on-clay: var(--on-clay);
+  --color-teal: var(--teal);
+  --color-teal-text: var(--teal-text);
+  --color-teal-soft: var(--teal-soft);
+  --color-teal-ink: var(--teal-ink);
+  --color-highlight: var(--highlight);
+  --color-online: var(--online);
+  --color-danger: var(--danger);
+  --color-danger-line: var(--danger-line);
+  --color-bar: var(--bar);
+  --color-bar-ink: var(--bar-ink);
+  --color-bar-chip: var(--bar-chip);
+  --color-bar-chip-ink: var(--bar-chip-ink);
+  --color-bar-muted: var(--bar-muted);
+  --color-toast-accent: var(--toast-accent);
+  --color-pill-idea: var(--pill-idea-bg);
+  --color-pill-idea-ink: var(--pill-idea-ink);
+  --shadow-float: var(--shadow);
+  --font-sans: var(--font-instrument), system-ui, sans-serif;
+  --font-display: var(--font-fraunces), Georgia, serif;
+}
+
+@layer base {
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--clay);
+  outline-offset: 2px;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--ink-3);
+  opacity: 0.85;
+}
+
+.bar input::placeholder {
+  color: var(--bar-muted);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.6;
+}
+
+:root[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+@keyframes fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
