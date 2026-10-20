@@ -7,6 +7,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { useSpace } from "@/components/app/SpaceProvider";
 import { NamePicker } from "@/components/app/NamePicker";
 import { useNav } from "@/lib/client/nav";
+import { showToast } from "@/lib/client/toast";
 import { storage } from "@/lib/client/util";
 
 type Theme = "system" | "light" | "dark";
@@ -52,7 +53,12 @@ export function Settings() {
   }, [theme]);
 
   const lock = async () => {
-    await fetch("/api/lock", { method: "POST" }).catch(() => {});
+    // Only the server can clear the cookie, so locking needs a connection.
+    const res = await fetch("/api/lock", { method: "POST" }).catch(() => null);
+    if (!res?.ok) {
+      showToast({ message: "Connect to the internet to lock this device.", tone: "error" });
+      return;
+    }
     storage.set("ours:cache", null);
     window.location.replace("/unlock");
   };

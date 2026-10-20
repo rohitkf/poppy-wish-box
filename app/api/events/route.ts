@@ -62,7 +62,8 @@ export async function GET(req: NextRequest) {
         send(`event: error\ndata: {}\n\n`);
         return close();
       }
-      send(`retry: 1500\nevent: ready\ndata: {}\n\n`);
+      // `build` lets open apps notice a newer release and offer a reload.
+      send(`retry: 1500\nevent: ready\ndata: ${JSON.stringify({ build: process.env.APP_BUILD })}\n\n`);
     },
     cancel() {
       cleanup();

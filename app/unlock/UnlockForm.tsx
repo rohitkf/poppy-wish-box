@@ -4,7 +4,9 @@ import { useState } from "react";
 import { Icon } from "@/components/icons";
 
 /** Numeric code entry. With `length` known, it submits as soon as the last digit is typed. */
-export function UnlockForm({ length }: { length: number | null }) {
+export function UnlockForm({ length: initialLength }: { length: number | null }) {
+  // Kept fresh from each reply, in case the code changed while this page was open.
+  const [length, setLength] = useState(initialLength);
   const [code, setCode] = useState("");
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +27,7 @@ export function UnlockForm({ length }: { length: number | null }) {
         window.location.replace("/");
         return;
       }
+      if (typeof body.length === "number") setLength(body.length);
       setError(body.error || "Something went wrong. Try again.");
       setCode("");
     } catch {
@@ -57,7 +60,6 @@ export function UnlockForm({ length }: { length: number | null }) {
           type={show ? "text" : "password"}
           inputMode="numeric"
           pattern="[0-9]*"
-          maxLength={length ?? 12}
           value={code}
           onChange={(e) => onChange(e.target.value)}
           autoComplete="current-password"

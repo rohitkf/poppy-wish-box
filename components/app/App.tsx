@@ -14,6 +14,7 @@ import { ListView } from "@/components/app/ListView";
 import { ItemDetail } from "@/components/app/ItemDetail";
 import { Settings } from "@/components/app/Settings";
 import { NamePicker } from "@/components/app/NamePicker";
+import { UpdatePrompt } from "@/components/app/UpdatePrompt";
 import { makeQueryClient, useOutboxSize } from "@/lib/client/store";
 import { useNav } from "@/lib/client/nav";
 
@@ -181,6 +182,7 @@ export function App() {
     <PersistQueryClientProvider client={qc} persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24 * 14, buster: "v1" }}>
       <SpaceProvider loading={<Splash />} error={(retry) => <ErrorScreen retry={retry} />}>
         <Shell />
+        <UpdatePrompt />
       </SpaceProvider>
       <Toaster />
     </PersistQueryClientProvider>
