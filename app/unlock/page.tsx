@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
+import { appPin } from "@/lib/session";
 import { UnlockForm } from "./UnlockForm";
 
 export const metadata: Metadata = { title: "Unlock · Ours" };
+// Reads APP_PIN at request time, so the form always knows the current code's length.
+export const dynamic = "force-dynamic";
 
 export default function UnlockPage() {
   return (
@@ -17,14 +20,14 @@ export default function UnlockPage() {
             One list for the two of you. Places to go, things to buy, plans to make.
           </p>
         </div>
-        <UnlockForm />
+        <UnlockForm length={appPin()?.length ?? null} />
       </div>
       <div className="flex items-center gap-2 text-[13px] text-ink-3">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
           <rect x="5" y="11" width="14" height="10" rx="2" />
           <path d="M8 11V8a4 4 0 0 1 8 0v3" />
         </svg>
-        <span>Private space. Only people with the passcode can see it.</span>
+        <span>Private space. Only people with the code can see it.</span>
       </div>
     </div>
   );

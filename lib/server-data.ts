@@ -193,7 +193,7 @@ export async function loadSpaceData(spaceId: string): Promise<SpaceData> {
       [spaceId],
     ),
   ]);
-  if (!space.rows[0]) throw new HttpError(401, "Locked");
+  if (!space.rows[0]) throw new HttpError(404, "This space no longer exists.");
   return {
     space: space.rows[0],
     lists: lists.rows,

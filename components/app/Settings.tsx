@@ -54,7 +54,7 @@ export function Settings() {
   const lock = async () => {
     await fetch("/api/lock", { method: "POST" }).catch(() => {});
     storage.set("ours:cache", null);
-    window.location.href = "/unlock";
+    window.location.replace("/unlock");
   };
 
   return (

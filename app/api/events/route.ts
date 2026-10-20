@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
-import { spaceFromRequest, unauthorized } from "@/lib/session";
+import { isUnlocked, unauthorized } from "@/lib/session";
+import { currentSpaceId, noSpace } from "@/lib/space";
 import { hub } from "@/lib/realtime";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +12,9 @@ const STREAM_MS = 270_000;
 const HEARTBEAT_MS = 20_000;
 
 export async function GET(req: NextRequest) {
-  const spaceId = await spaceFromRequest(req);
-  if (!spaceId) return unauthorized();
+  if (!(await isUnlocked(req))) return unauthorized();
+  const spaceId = await currentSpaceId();
+  if (!spaceId) return noSpace();
 
   const encoder = new TextEncoder();
   let cleanup = () => {};
