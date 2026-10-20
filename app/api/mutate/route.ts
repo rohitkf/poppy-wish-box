@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { isUnlocked, unauthorized } from "@/lib/session";
 import { currentSpaceId, noSpace } from "@/lib/space";
 import { applyMutation, HttpError } from "@/lib/server-data";
 import type { Mutation } from "@/lib/types";
@@ -6,6 +7,7 @@ import type { Mutation } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  if (!(await isUnlocked(req))) return unauthorized();
   const spaceId = await currentSpaceId();
   if (!spaceId) return noSpace();
   let mutation: Mutation;

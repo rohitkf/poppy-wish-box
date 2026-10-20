@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/setup.mjs --on-build && next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -21,6 +21,7 @@
     "@vercel/functions": "^3.9.9",
     "clsx": "^2.1.1",
     "framer-motion": "^13.4.6",
+    "jose": "^6.2.13",
     "next": "^16.3.7",
     "pg": "^8.23.0",
     "react": "^19.3.0",

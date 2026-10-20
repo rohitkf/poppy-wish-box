@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { isUnlocked, unauthorized } from "@/lib/session";
 import { currentSpaceId, noSpace } from "@/lib/space";
 import { hub } from "@/lib/realtime";
 
@@ -11,6 +12,7 @@ const STREAM_MS = 270_000;
 const HEARTBEAT_MS = 20_000;
 
 export async function GET(req: NextRequest) {
+  if (!(await isUnlocked(req))) return unauthorized();
   const spaceId = await currentSpaceId();
   if (!spaceId) return noSpace();
 

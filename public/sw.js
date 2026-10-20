@@ -1,7 +1,7 @@
 // Ours service worker: app shell offline, network-first for pages,
 // cache-first for build assets and photos. API data is cached by the app itself.
 const VERSION = "ours-v1";
-const SHELL = ["/", "/manifest.webmanifest", "/icons/icon-192.png"];
+const SHELL = ["/", "/unlock", "/manifest.webmanifest", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -17,8 +17,6 @@ self.addEventListener("activate", (event) => {
     caches
       .keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
-      // Earlier versions cached the passphrase screen; it no longer exists.
-      .then(() => caches.open(VERSION).then((c) => c.delete("/unlock")))
       .then(() => self.clients.claim()),
   );
 });

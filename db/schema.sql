@@ -2,7 +2,7 @@
 -- Idempotent: safe to run again on every deploy/setup.
 --
 -- The browser never talks to the database. Every query goes through a Next.js
--- route that scopes it to the deployment's one space (there is no sign-in).
+-- route that checks the unlock cookie and scopes it to the deployment's one space.
 -- Live sync: triggers pg_notify() on channel "ours" for each change; the
 -- /api/events route LISTENs and streams matching changes to each device (SSE).
 
@@ -16,10 +16,6 @@ create table if not exists spaces (
   default_currency text not null default 'GBP',
   created_at timestamptz not null default now()
 );
-
--- Earlier versions were unlocked with a passphrase; there is no sign-in now.
--- One-way: an older passphrase build can't use this database after it runs.
-alter table spaces drop column if exists passcode_hash;
 
 create table if not exists lists (
   id uuid primary key default gen_random_uuid(),
@@ -81,7 +77,13 @@ create table if not exists item_photos (
   created_at timestamptz not null default now()
 );
 
-drop table if exists unlock_attempts;
+-- Wrong unlock codes per IP: 5 tries, then a 15-minute pause.
+create table if not exists unlock_attempts (
+  ip text primary key,
+  failures integer not null default 0,
+  locked_until timestamptz,
+  updated_at timestamptz not null default now()
+);
 
 create table if not exists presence (
   space_id uuid not null references spaces (id) on delete cascade,

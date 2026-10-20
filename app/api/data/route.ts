@@ -1,9 +1,12 @@
+import type { NextRequest } from "next/server";
+import { isUnlocked, unauthorized } from "@/lib/session";
 import { currentSpaceId, noSpace } from "@/lib/space";
 import { HttpError, loadSpaceData } from "@/lib/server-data";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  if (!(await isUnlocked(req))) return unauthorized();
   try {
     const spaceId = await currentSpaceId();
     if (!spaceId) return noSpace();

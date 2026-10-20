@@ -33,11 +33,19 @@ export class ApiError extends Error {
 
 const isNetworkError = (e: unknown) => e instanceof TypeError;
 
+function goToUnlock() {
+  if (typeof window !== "undefined" && window.location.pathname !== "/unlock") window.location.replace("/unlock");
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
     headers: init?.body instanceof FormData ? init?.headers : { "Content-Type": "application/json", ...init?.headers },
   });
+  if (res.status === 401) {
+    goToUnlock();
+    throw new ApiError("Locked", 401);
+  }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(body.error || "Something went wrong", res.status);
   return body as T;
@@ -54,7 +62,7 @@ export function makeQueryClient() {
         refetchOnWindowFocus: true,
         refetchOnReconnect: true,
         networkMode: "offlineFirst",
-        retry: 2,
+        retry: (count, e) => !(e instanceof ApiError && e.status === 401) && count < 2,
       },
     },
   });
@@ -98,7 +106,7 @@ export function flushOutbox(qc: QueryClient) {
         try {
           await api("/api/mutate", { method: "POST", body: JSON.stringify(outbox[0]) });
         } catch (e) {
-          if (isNetworkError(e)) return;
+          if (isNetworkError(e) || (e instanceof ApiError && e.status === 401)) return;
           showToast({ message: `A queued change couldn't be saved: ${(e as Error).message}`, tone: "error" });
         }
         outbox.shift();
@@ -283,6 +291,7 @@ export function useActions(me: string | null) {
 
   const fail = useCallback(
     (e: unknown) => {
+      if (e instanceof ApiError && e.status === 401) return;
       showToast({ message: `Couldn't save: ${(e as Error).message}. Change undone.`, tone: "error" });
       qc.invalidateQueries({ queryKey: DATA_KEY });
     },
@@ -540,7 +549,9 @@ export function useActions(me: string | null) {
           mergeRow("photos", res.row as unknown as Record<string, unknown>);
         } catch (e) {
           set((s) => ({ ...s, photos: s.photos.filter((p) => p.id !== id) }));
-          showToast({ message: `Photo not saved: ${(e as Error).message}`, tone: "error" });
+          if (!(e instanceof ApiError && e.status === 401)) {
+            showToast({ message: `Photo not saved: ${(e as Error).message}`, tone: "error" });
+          }
         }
       },
 

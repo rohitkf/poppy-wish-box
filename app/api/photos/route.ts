@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { put } from "@vercel/blob";
 import { db } from "@/lib/db";
+import { isUnlocked, unauthorized } from "@/lib/session";
 import { currentSpaceId, noSpace } from "@/lib/space";
 import { uuid } from "@/lib/server-data";
 
@@ -12,6 +13,7 @@ const TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png",
 
 /** Multipart upload: file, id, itemId, width, height. Stored in a private Blob store. */
 export async function POST(req: NextRequest) {
+  if (!(await isUnlocked(req))) return unauthorized();
   const spaceId = await currentSpaceId();
   if (!spaceId) return noSpace();
 

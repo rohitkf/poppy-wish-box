@@ -51,6 +51,12 @@ export function Settings() {
     return () => mq.removeEventListener("change", h);
   }, [theme]);
 
+  const lock = async () => {
+    await fetch("/api/lock", { method: "POST" }).catch(() => {});
+    storage.set("ours:cache", null);
+    window.location.replace("/unlock");
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-[640px] flex-col gap-6 px-5 pt-3 pb-16 safe-top lg:px-10 lg:pt-10">
       <header className="flex items-center gap-2 lg:hidden">
@@ -163,6 +169,13 @@ export function Settings() {
               browser menu.
             </p>
           )}
+          <button
+            type="button"
+            onClick={lock}
+            className="flex h-11 items-center justify-center gap-2 rounded-xl border border-danger-line text-[15px] font-medium text-danger"
+          >
+            <Icon.Lock size={18} /> Lock this device
+          </button>
         </div>
       </Section>
 

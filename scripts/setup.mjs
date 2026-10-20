@@ -1,13 +1,19 @@
 #!/usr/bin/env node
-// One-time setup: applies db/schema.sql and creates your shared space.
-//   DATABASE_URL=... npm run setup
+// Applies db/schema.sql and creates your shared space if there isn't one yet.
 // Safe to run again: the schema is idempotent and an existing space is kept.
+//   Production deploys on Vercel run it automatically (`npm run build` calls it with --on-build).
+//   Locally: DATABASE_URL=... npm run setup
 import { readFileSync } from "node:fs";
 import pg from "pg";
 
+if (process.argv.includes("--on-build") && process.env.VERCEL_ENV !== "production") {
+  console.log("Database setup skipped: only production builds on Vercel run it.");
+  process.exit(0);
+}
+
 const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
 if (!url) {
-  console.error("Set DATABASE_URL first (vercel env pull .env.local, then: npm run setup)");
+  console.error("Set DATABASE_URL first (connect Neon in Vercel → Storage; locally: vercel env pull .env.local)");
   process.exit(1);
 }
 

@@ -1,12 +1,14 @@
 import type { NextRequest } from "next/server";
 import { get } from "@vercel/blob";
 import { db } from "@/lib/db";
+import { isUnlocked, unauthorized } from "@/lib/session";
 import { currentSpaceId, noSpace } from "@/lib/space";
 
 export const dynamic = "force-dynamic";
 
-/** Streams a photo from the private Blob store. Photo ids never change content. */
+/** Streams a private photo to unlocked devices. Photo ids never change content. */
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  if (!(await isUnlocked(req))) return unauthorized();
   const spaceId = await currentSpaceId();
   if (!spaceId) return noSpace();
   const { id } = await ctx.params;
