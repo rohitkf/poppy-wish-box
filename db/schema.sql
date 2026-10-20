@@ -18,6 +18,7 @@ create table if not exists spaces (
 );
 
 -- Earlier versions were unlocked with a passphrase; there is no sign-in now.
+-- One-way: an older passphrase build can't use this database after it runs.
 alter table spaces drop column if exists passcode_hash;
 
 create table if not exists lists (

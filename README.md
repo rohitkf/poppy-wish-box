@@ -37,8 +37,9 @@ store for photos. No other services.
    npx vercel env pull .env.local
    npm run setup
    ```
-   This applies the schema and creates your space with three starter lists. It's safe to
-   run again after pulling changes. Your data is kept.
+   This applies the schema and creates your space with three starter lists. Running it again
+   keeps your data. It also removes the passphrase tables from earlier versions, so run it
+   on a database only once the deployment using that database runs this version.
 5. **Deploy** (or redeploy), open the URL on both phones, pick your names,
    then *Share → Add to Home Screen*.
 
@@ -91,5 +92,6 @@ scripts/setup.mjs          schema + space
 - Live sync streams restart every ~4.5 minutes (Vercel function duration). The client
   reconnects and refetches, so nothing is missed.
 - Uploading photos needs a connection. Other edits queue offline.
-- There is no sign-in. Anyone who has the URL can see and change everything, including photos,
-  so keep the URL between the two of you.
+- There is no sign-in. Anyone who has the URL can see and change everything, including photos.
+  The URL isn't secret by default: a `*.vercel.app` address comes from the project name, and a
+  public GitHub repo can show it. Keep the repo private and don't publish the address.

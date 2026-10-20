@@ -17,6 +17,8 @@ self.addEventListener("activate", (event) => {
     caches
       .keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
+      // Earlier versions cached the passphrase screen; it no longer exists.
+      .then(() => caches.open(VERSION).then((c) => c.delete("/unlock")))
       .then(() => self.clients.claim()),
   );
 });
