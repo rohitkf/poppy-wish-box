@@ -134,7 +134,9 @@ async function send(m: Mutation): Promise<Record<string, unknown> | null> {
     });
     return res.row;
   } catch (e) {
-    if (isNetworkError(e)) {
+    // Signed out mid-edit (cookie expired or the code changed): keep the change and
+    // replay it once the device is unlocked again.
+    if (isNetworkError(e) || (e instanceof ApiError && e.status === 401)) {
       outbox.push(m);
       saveOutbox();
       return null;

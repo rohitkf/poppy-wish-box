@@ -24,6 +24,8 @@ interface SpaceCtx {
   here: string[];
   online: boolean;
   live: boolean;
+  /** Build id of a newer release the server is running, if any. */
+  newBuild: string | null;
   actions: Actions;
 }
 
@@ -50,6 +52,7 @@ export function SpaceProvider({
   const [deviceId] = useState(getDeviceId);
   const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [live, setLive] = useState(false);
+  const [newBuild, setNewBuild] = useState<string | null>(null);
   const now = useNow();
   const meRef = useRef(me);
   useEffect(() => {
@@ -88,8 +91,15 @@ export function SpaceProvider({
     const connect = () => {
       if (stopped) return;
       es = new EventSource("/api/events");
-      es.addEventListener("ready", () => {
+      es.addEventListener("ready", (e) => {
         setLive(true);
+        // Streams reconnect every few minutes, so a new release is noticed soon after it goes live.
+        try {
+          const build = JSON.parse((e as MessageEvent).data).build;
+          if (typeof build === "string" && build !== process.env.APP_BUILD) setNewBuild(build);
+        } catch {
+          /* ignore malformed */
+        }
         // Reconnected after a gap: refetch whatever we may have missed.
         if (!firstReady) qc.invalidateQueries({ queryKey: DATA_KEY });
         firstReady = false;
@@ -166,7 +176,7 @@ export function SpaceProvider({
   }
 
   return (
-    <Ctx.Provider value={{ data: query.data, me, setMe, deviceId, here, online, live, actions }}>
+    <Ctx.Provider value={{ data: query.data, me, setMe, deviceId, here, online, live, newBuild, actions }}>
       {children}
     </Ctx.Provider>
   );

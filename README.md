@@ -22,6 +22,7 @@ store for photos. No other services.
 | Presence | 30 s heartbeat to `/api/presence`, broadcast the same way → "Jolsna is here" |
 | Photos | Compressed on the phone (≤1600 px JPEG), uploaded to a **private** Blob store, served only through `/api/photos/[id]` after the cookie check |
 | Offline | Last data cached on the device (readable offline); edits made offline queue in order and replay on reconnect; service worker caches the app shell and photos |
+| Updates | Each build carries its commit id; the live-sync stream reports the server's, and an open app on an older build offers *Reload* |
 | UI | Tailwind CSS v4, Radix primitives (shadcn‑style), Framer Motion, TanStack Query. Light and dark themes (follows the system, with a manual override) |
 
 ## Deploy on Vercel (about 10 minutes)
@@ -31,7 +32,7 @@ store for photos. No other services.
    Connect it to the project. This adds `DATABASE_URL` and `DATABASE_URL_UNPOOLED`.
 3. **Add Blob:** Project → *Storage* → *Create* → **Blob**, access **Private**. This adds `BLOB_READ_WRITE_TOKEN`.
 4. **Set the unlock code:** Project → *Settings → Environment Variables* → `APP_PIN` = a 4–12 digit
-   code, for Production and Preview. Changing it later signs every device out.
+   code, for Production and Preview. Changing it later, then redeploying, signs every device out.
 5. **Deploy** (or redeploy). Each production build applies the schema and, the first time, creates
    your space with three starter lists, so there's nothing to run by hand. Open the app on both
    phones, enter the code, pick your names, then *Share → Add to Home Screen*.
@@ -88,6 +89,8 @@ scripts/setup.mjs          schema + space (run by production builds)
 - Live sync streams restart every ~4.5 minutes (Vercel function duration). The client
   reconnects and refetches, so nothing is missed.
 - Uploading photos needs a connection. Other edits queue offline.
-- The code is the only key, and a short one: the lockout slows guessing but can't stop someone
-  who keeps trying from many networks. Keep the app's address between the two of you.
-  *Settings → Lock this device* signs one device out; changing `APP_PIN` signs out all of them.
+- The code is the only key, and a short one: the lockout allows 5 tries per 15 minutes per network,
+  but can't stop someone guessing from many networks. While the repo is public, its Deployments
+  list shows the app's address, so a private repo keeps it from strangers.
+  *Settings → Lock this device* signs one device out; changing `APP_PIN` and redeploying signs out
+  all of them. Vercel only applies changed environment variables to new deployments.

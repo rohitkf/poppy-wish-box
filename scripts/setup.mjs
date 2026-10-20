@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import pg from "pg";
 
 if (process.argv.includes("--on-build") && process.env.VERCEL_ENV !== "production") {
-  console.log("Database setup skipped: only production builds on Vercel run it.");
+  console.log(`Database setup skipped (VERCEL_ENV=${process.env.VERCEL_ENV ?? "unset"}): only production builds on Vercel run it.`);
   process.exit(0);
 }
 
