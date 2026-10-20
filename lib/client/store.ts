@@ -34,7 +34,7 @@ export class ApiError extends Error {
 const isNetworkError = (e: unknown) => e instanceof TypeError;
 
 function goToUnlock() {
-  if (typeof window !== "undefined" && window.location.pathname !== "/unlock") window.location.href = "/unlock";
+  if (typeof window !== "undefined" && window.location.pathname !== "/unlock") window.location.replace("/unlock");
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {

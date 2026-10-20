@@ -1,13 +1,15 @@
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { spaceFromRequest, unauthorized } from "@/lib/session";
+import { isUnlocked, unauthorized } from "@/lib/session";
+import { currentSpaceId, noSpace } from "@/lib/space";
 
 export const dynamic = "force-dynamic";
 
 /** Heartbeat: { deviceId, name } marks this device as here; { leave: true } removes it. */
 export async function POST(req: NextRequest) {
-  const spaceId = await spaceFromRequest(req);
-  if (!spaceId) return unauthorized();
+  if (!(await isUnlocked(req))) return unauthorized();
+  const spaceId = await currentSpaceId();
+  if (!spaceId) return noSpace();
   const body = await req.json().catch(() => null);
   const deviceId = typeof body?.deviceId === "string" ? body.deviceId.slice(0, 64) : "";
   const name = typeof body?.name === "string" ? body.name.trim().slice(0, 40) : "";

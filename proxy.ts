@@ -2,15 +2,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
 
 // Optimistic gate: send anyone without a valid session to /unlock.
-// Real enforcement is RLS on every Supabase query.
+// Real enforcement is the same cookie check in every API route.
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const spaceId = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
+  const unlocked = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
 
   if (pathname === "/unlock") {
-    return spaceId ? NextResponse.redirect(new URL("/", req.url)) : NextResponse.next();
+    return unlocked ? NextResponse.redirect(new URL("/", req.url)) : NextResponse.next();
   }
-  if (!spaceId) {
+  if (!unlocked) {
     return NextResponse.redirect(new URL("/unlock", req.url));
   }
   return NextResponse.next();

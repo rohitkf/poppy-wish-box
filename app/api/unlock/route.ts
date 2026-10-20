@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import bcrypt from "bcryptjs";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { db } from "@/lib/db";
-import { SESSION_COOKIE, SESSION_MAX_AGE, signSession } from "@/lib/session";
+import { appPin, SESSION_COOKIE, SESSION_MAX_AGE, signSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +12,17 @@ function clientIp(req: NextRequest) {
   return req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
 }
 
+const digest = (s: string) => createHash("sha256").update(s).digest();
+
 export async function POST(req: NextRequest) {
+  const pin = appPin();
+  if (!pin) {
+    return NextResponse.json({ error: "The unlock code isn't set up yet. Add APP_PIN in Vercel." }, { status: 503 });
+  }
   const body = await req.json().catch(() => null);
-  const passcode = typeof body?.passcode === "string" ? body.passcode : "";
-  if (!passcode || passcode.length > 200) {
-    return NextResponse.json({ error: "Enter the passcode." }, { status: 400 });
+  const code = typeof body?.code === "string" ? body.code.trim() : "";
+  if (!/^\d{1,12}$/.test(code)) {
+    return NextResponse.json({ error: "Enter the code, numbers only." }, { status: 400 });
   }
 
   const pool = db();
@@ -34,16 +40,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { rows: spaces } = await pool.query("select id, passcode_hash from spaces");
-  let spaceId: string | null = null;
-  for (const s of spaces) {
-    if (await bcrypt.compare(passcode, s.passcode_hash)) {
-      spaceId = s.id;
-      break;
-    }
-  }
-
-  if (!spaceId) {
+  if (!timingSafeEqual(digest(code), digest(pin))) {
     // Count failures; an expired lockout starts a fresh count.
     const { rows } = await pool.query(
       `insert into unlock_attempts (ip, failures, updated_at) values ($1, 1, now())
@@ -74,7 +71,7 @@ export async function POST(req: NextRequest) {
 
   await pool.query("delete from unlock_attempts where ip = $1", [ip]);
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(SESSION_COOKIE, await signSession(spaceId), {
+  res.cookies.set(SESSION_COOKIE, await signSession(), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

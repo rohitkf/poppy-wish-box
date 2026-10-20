@@ -1,19 +1,19 @@
 #!/usr/bin/env node
-// One-time setup: applies db/schema.sql and creates your private space.
-//   DATABASE_URL=... npm run setup -- "a long shared passphrase"
-// Run again with a new passphrase to change it (the existing space is kept).
+// Applies db/schema.sql and creates your shared space if there isn't one yet.
+// Safe to run again: the schema is idempotent and an existing space is kept.
+//   Production deploys on Vercel run it automatically (`npm run build` calls it with --on-build).
+//   Locally: DATABASE_URL=... npm run setup
 import { readFileSync } from "node:fs";
 import pg from "pg";
-import bcrypt from "bcryptjs";
 
-const pass = process.argv.slice(2).join(" ").trim();
-if (pass.length < 12) {
-  console.error('Give a passphrase of at least 12 characters:\n  npm run setup -- "summer in skye 2027"');
-  process.exit(1);
+if (process.argv.includes("--on-build") && process.env.VERCEL_ENV !== "production") {
+  console.log("Database setup skipped: only production builds on Vercel run it.");
+  process.exit(0);
 }
+
 const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
 if (!url) {
-  console.error("Set DATABASE_URL first (vercel env pull .env.local, then: node --env-file=.env.local scripts/setup.mjs ...)");
+  console.error("Set DATABASE_URL first (connect Neon in Vercel → Storage; locally: vercel env pull .env.local)");
   process.exit(1);
 }
 
@@ -21,16 +21,11 @@ const client = new pg.Client({ connectionString: url });
 await client.connect();
 try {
   await client.query(readFileSync(new URL("../db/schema.sql", import.meta.url), "utf8"));
-  const hash = bcrypt.hashSync(pass, 12);
   const { rows } = await client.query("select id from spaces order by created_at limit 1");
   if (rows[0]) {
-    await client.query("update spaces set passcode_hash = $1 where id = $2", [hash, rows[0].id]);
-    console.log("Schema up to date. Passcode changed for your existing space.");
+    console.log("Schema up to date. Your space is already set up.");
   } else {
-    const { rows: created } = await client.query(
-      "insert into spaces (name, passcode_hash) values ('Ours', $1) returning id",
-      [hash],
-    );
+    const { rows: created } = await client.query("insert into spaces (name) values ('Ours') returning id");
     const spaceId = created[0].id;
     const starters = [
       ["Places to go", "icon:pin", "clay"],
@@ -46,7 +41,7 @@ try {
         i + 1,
       ]);
     }
-    console.log("Schema applied. Space created with three starter lists. Share the passphrase with your partner.");
+    console.log("Schema applied. Space created with three starter lists.");
   }
 } finally {
   await client.end();
