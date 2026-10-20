@@ -32,6 +32,8 @@ export class ApiError extends Error {
 }
 
 const isNetworkError = (e: unknown) => e instanceof TypeError;
+/** The server or its database is briefly unavailable: worth retrying, not undoing. */
+const isUnavailable = (e: unknown) => e instanceof ApiError && e.status >= 502 && e.status <= 504;
 
 function goToUnlock() {
   if (typeof window !== "undefined" && window.location.pathname !== "/unlock") window.location.replace("/unlock");
@@ -97,8 +99,24 @@ export function useOutboxSize() {
   );
 }
 
+// Retries while the device thinks it's online but the server can't take the change yet
+// (no "online" event will come): 5 s, doubling up to a minute.
+let retryClient: QueryClient | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let retryDelay = 5000;
+function retryLater() {
+  if (retryTimer || !retryClient) return;
+  const qc = retryClient;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    flushOutbox(qc);
+  }, retryDelay);
+  retryDelay = Math.min(retryDelay * 2, 60_000);
+}
+
 let flushing: Promise<void> | null = null;
 export function flushOutbox(qc: QueryClient) {
+  retryClient = qc;
   if (flushing || !outbox.length) return flushing ?? Promise.resolve();
   flushing = (async () => {
     try {
@@ -106,12 +124,14 @@ export function flushOutbox(qc: QueryClient) {
         try {
           await api("/api/mutate", { method: "POST", body: JSON.stringify(outbox[0]) });
         } catch (e) {
-          if (isNetworkError(e) || (e instanceof ApiError && e.status === 401)) return;
+          if (e instanceof ApiError && e.status === 401) return; // replayed after unlocking
+          if (isNetworkError(e) || isUnavailable(e)) return retryLater();
           showToast({ message: `A queued change couldn't be saved: ${(e as Error).message}`, tone: "error" });
         }
         outbox.shift();
         saveOutbox();
       }
+      retryDelay = 5000;
       await qc.invalidateQueries({ queryKey: DATA_KEY });
     } finally {
       flushing = null;
@@ -134,11 +154,12 @@ async function send(m: Mutation): Promise<Record<string, unknown> | null> {
     });
     return res.row;
   } catch (e) {
-    // Signed out mid-edit (cookie expired or the code changed): keep the change and
-    // replay it once the device is unlocked again.
-    if (isNetworkError(e) || (e instanceof ApiError && e.status === 401)) {
+    // Offline, briefly unavailable, or signed out mid-edit (cookie expired or the code
+    // changed): keep the change and replay it later or once the device is unlocked again.
+    if (isNetworkError(e) || isUnavailable(e) || (e instanceof ApiError && e.status === 401)) {
       outbox.push(m);
       saveOutbox();
+      if (!(e instanceof ApiError && e.status === 401)) retryLater();
       return null;
     }
     throw e;

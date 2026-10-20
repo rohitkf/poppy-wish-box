@@ -214,7 +214,8 @@ export const LIST_ICONS: Record<string, (p: P) => React.ReactElement> = {
 
 /** Renders a list's icon: a built-in line icon, or the emoji the couple picked. */
 export function ListGlyph({ emoji, size = 24 }: { emoji: string; size?: number }) {
-  const Cmp = LIST_ICONS[emoji];
+  // hasOwn: an "emoji" like "constructor" must not resolve to Object's built-ins.
+  const Cmp = Object.hasOwn(LIST_ICONS, emoji) ? LIST_ICONS[emoji] : undefined;
   if (Cmp) return <Cmp size={size} />;
   return (
     <span style={{ fontSize: size * 0.9, lineHeight: 1 }} aria-hidden="true">

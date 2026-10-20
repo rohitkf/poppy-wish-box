@@ -27,6 +27,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (!result || result.statusCode !== 200) return new Response("Not found", { status: 404 });
 
   return new Response(result.stream, {
-    headers: { ...cacheHeaders, "Content-Type": result.blob.contentType, "Content-Length": String(result.blob.size) },
+    headers: {
+      ...cacheHeaders,
+      "Content-Type": result.blob.contentType,
+      "Content-Length": String(result.blob.size),
+      // Uploaded bytes are only ever images: never let one run as a page.
+      "Content-Security-Policy": "default-src 'none'; sandbox",
+    },
   });
 }

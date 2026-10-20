@@ -2,11 +2,24 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // The Dockerfile sets BUILD_STANDALONE=1 to get a self-contained server; Vercel builds don't.
+  output: process.env.BUILD_STANDALONE === "1" ? "standalone" : undefined,
   // Identifies this build in the browser and on the server, so an open app can tell
   // when a newer release is live (see components/app/UpdatePrompt.tsx).
-  env: { APP_BUILD: process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || "dev" },
+  env: {
+    APP_BUILD:
+      process.env.APP_BUILD || process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || "dev",
+  },
   async headers() {
     return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Referrer-Policy", value: "same-origin" },
+        ],
+      },
       {
         source: "/sw.js",
         headers: [

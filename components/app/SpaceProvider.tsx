@@ -81,17 +81,20 @@ export function SpaceProvider({
     };
   }, [qc]);
 
-  // Live sync over Server-Sent Events.
+  // Live sync over Server-Sent Events. An open stream keeps a server and the database
+  // awake, so a tab hidden for a minute closes it and catches up when it's shown again.
   useEffect(() => {
     let es: EventSource | null = null;
     let retry: ReturnType<typeof setTimeout> | null = null;
+    let idle: ReturnType<typeof setTimeout> | null = null;
     let firstReady = true;
     let stopped = false;
 
     const connect = () => {
-      if (stopped) return;
-      es = new EventSource("/api/events");
-      es.addEventListener("ready", (e) => {
+      if (stopped || es) return;
+      const source = new EventSource("/api/events");
+      es = source;
+      source.addEventListener("ready", (e) => {
         setLive(true);
         // Streams reconnect every few minutes, so a new release is noticed soon after it goes live.
         try {
@@ -104,19 +107,21 @@ export function SpaceProvider({
         if (!firstReady) qc.invalidateQueries({ queryKey: DATA_KEY });
         firstReady = false;
       });
-      es.onmessage = (msg) => {
+      source.onmessage = (msg) => {
         try {
           applyChange(qc, JSON.parse(msg.data) as ChangeEvent, meRef.current, deviceId);
         } catch {
           /* ignore malformed */
         }
       };
-      es.onerror = () => {
+      source.onerror = () => {
         setLive(false);
-        if (es?.readyState === EventSource.CLOSED) {
-          es.close();
+        if (source.readyState === EventSource.CLOSED) {
+          source.close();
+          if (es === source) es = null;
           // Might be a lock-out (401) — a data fetch will redirect if so.
           retry = setTimeout(() => {
+            retry = null;
             qc.invalidateQueries({ queryKey: DATA_KEY });
             firstReady = false;
             connect();
@@ -124,11 +129,32 @@ export function SpaceProvider({
         }
       };
     };
+    const disconnect = () => {
+      if (retry) clearTimeout(retry);
+      retry = null;
+      es?.close();
+      es = null;
+      setLive(false);
+      firstReady = false;
+    };
+    const onVisibility = () => {
+      if (idle) clearTimeout(idle);
+      idle = null;
+      if (document.visibilityState === "hidden") idle = setTimeout(disconnect, 60_000);
+      else connect();
+    };
     connect();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", disconnect);
+    window.addEventListener("pageshow", onVisibility);
     return () => {
       stopped = true;
       if (retry) clearTimeout(retry);
+      if (idle) clearTimeout(idle);
       es?.close();
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", disconnect);
+      window.removeEventListener("pageshow", onVisibility);
     };
   }, [qc, deviceId]);
 

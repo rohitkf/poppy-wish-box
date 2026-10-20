@@ -11,13 +11,15 @@ export function appPin(): string | null {
   return pin && /^\d{4,12}$/.test(pin) ? pin : null;
 }
 
-// Cookies are signed with a key derived from the code plus DATABASE_URL, a server-only
-// secret every deployment already has, so no extra setting is needed. Changing the code
-// signs every device out, and a cookie can't be forged or brute-forced without both.
+// Cookies are signed with a key derived from the code plus a server-only secret:
+// SESSION_SECRET if set (recommended when self-hosting), otherwise DATABASE_URL, which
+// every deployment already has. Changing the code or the secret signs every device out,
+// and a cookie can't be forged or brute-forced without both.
 async function sessionKey() {
   const pin = appPin();
   if (!pin) throw new Error("APP_PIN must be set to a 4–12 digit code");
-  const material = new TextEncoder().encode(`ours-session|${process.env.DATABASE_URL ?? ""}|${pin}`);
+  const secret = process.env.SESSION_SECRET || process.env.DATABASE_URL || "";
+  const material = new TextEncoder().encode(`ours-session|${secret}|${pin}`);
   return new Uint8Array(await crypto.subtle.digest("SHA-256", material));
 }
 
