@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { put } from "@vercel/blob";
 import { db } from "@/lib/db";
-import { spaceFromRequest, unauthorized } from "@/lib/session";
+import { currentSpaceId, noSpace } from "@/lib/space";
 import { uuid } from "@/lib/server-data";
 
 export const dynamic = "force-dynamic";
@@ -12,8 +12,8 @@ const TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png",
 
 /** Multipart upload: file, id, itemId, width, height. Stored in a private Blob store. */
 export async function POST(req: NextRequest) {
-  const spaceId = await spaceFromRequest(req);
-  if (!spaceId) return unauthorized();
+  const spaceId = await currentSpaceId();
+  if (!spaceId) return noSpace();
 
   try {
     const form = await req.formData();

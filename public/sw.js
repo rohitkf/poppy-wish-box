@@ -1,7 +1,7 @@
 // Ours service worker: app shell offline, network-first for pages,
 // cache-first for build assets and photos. API data is cached by the app itself.
 const VERSION = "ours-v1";
-const SHELL = ["/", "/unlock", "/manifest.webmanifest", "/icons/icon-192.png"];
+const SHELL = ["/", "/manifest.webmanifest", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

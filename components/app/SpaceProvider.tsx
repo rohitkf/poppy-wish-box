@@ -105,7 +105,7 @@ export function SpaceProvider({
         setLive(false);
         if (es?.readyState === EventSource.CLOSED) {
           es.close();
-          // Might be a lock-out (401) — a data fetch will redirect if so.
+          // Reconnect after a pause and refetch whatever was missed meanwhile.
           retry = setTimeout(() => {
             qc.invalidateQueries({ queryKey: DATA_KEY });
             firstReady = false;

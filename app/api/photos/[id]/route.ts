@@ -1,14 +1,14 @@
 import type { NextRequest } from "next/server";
 import { get } from "@vercel/blob";
 import { db } from "@/lib/db";
-import { spaceFromRequest, unauthorized } from "@/lib/session";
+import { currentSpaceId, noSpace } from "@/lib/space";
 
 export const dynamic = "force-dynamic";
 
-/** Streams a private photo to devices in its space. Photo ids never change content. */
+/** Streams a photo from the private Blob store. Photo ids never change content. */
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const spaceId = await spaceFromRequest(req);
-  if (!spaceId) return unauthorized();
+  const spaceId = await currentSpaceId();
+  if (!spaceId) return noSpace();
   const { id } = await ctx.params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) return new Response("Not found", { status: 404 });
 

@@ -2,7 +2,7 @@
 -- Idempotent: safe to run again on every deploy/setup.
 --
 -- The browser never talks to the database. Every query goes through a Next.js
--- route that scopes it to the space_id in the signed httpOnly session cookie.
+-- route that scopes it to the deployment's one space (there is no sign-in).
 -- Live sync: triggers pg_notify() on channel "ours" for each change; the
 -- /api/events route LISTENs and streams matching changes to each device (SSE).
 
@@ -11,12 +11,14 @@ create extension if not exists pgcrypto;
 create table if not exists spaces (
   id uuid primary key default gen_random_uuid(),
   name text not null default 'Ours',
-  passcode_hash text not null,
   member_names text[] not null default '{}',
   priority_labels text[] not null default array['Low', 'Medium', 'High'],
   default_currency text not null default 'GBP',
   created_at timestamptz not null default now()
 );
+
+-- Earlier versions were unlocked with a passphrase; there is no sign-in now.
+alter table spaces drop column if exists passcode_hash;
 
 create table if not exists lists (
   id uuid primary key default gen_random_uuid(),
@@ -78,12 +80,7 @@ create table if not exists item_photos (
   created_at timestamptz not null default now()
 );
 
-create table if not exists unlock_attempts (
-  ip text primary key,
-  failures integer not null default 0,
-  locked_until timestamptz,
-  updated_at timestamptz not null default now()
-);
+drop table if exists unlock_attempts;
 
 create table if not exists presence (
   space_id uuid not null references spaces (id) on delete cascade,
@@ -122,9 +119,6 @@ declare
 begin
   rec := case when tg_op = 'DELETE' then old else new end;
   row_json := to_jsonb(rec);
-  if tg_table_name = 'spaces' then
-    row_json := row_json - 'passcode_hash';
-  end if;
   payload := jsonb_build_object(
     'space', case when tg_table_name = 'spaces' then row_json ->> 'id' else row_json ->> 'space_id' end,
     'table', tg_table_name,
