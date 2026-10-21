@@ -1,6 +1,6 @@
 # Production image for Ours: a self-contained Next.js server (standalone output).
 #   docker build --build-arg APP_BUILD=$(git rev-parse HEAD) -t ours .
-#   docker run -p 3000:3000 -e DATABASE_URL=... -e APP_PIN=... ours
+#   docker run -p 3000:3000 -e DATABASE_URL=... -e APP_PIN=... -e SESSION_SECRET=$(openssl rand -hex 32) ours
 # On start it applies db/schema.sql (idempotent), then serves on $PORT.
 
 FROM node:24-alpine AS deps

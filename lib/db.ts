@@ -18,7 +18,11 @@ function connectionString(unpooled = false) {
 
 // pg 8 already treats sslmode=require (what Neon hands out), prefer and verify-ca as verify-full,
 // and warns about it on every new connection. Asking for verify-full keeps that behaviour, quietly.
-const strictSsl = (url: string) => url.replace(/([?&]sslmode=)(?:prefer|require|verify-ca)(?=&|$)/, "$1verify-full");
+// A URL that opts into libpq semantics (uselibpqcompat=true) means what it says and is left alone.
+const strictSsl = (url: string) =>
+  /[?&]uselibpqcompat=true(?=&|$)/i.test(url)
+    ? url
+    : url.replace(/([?&]sslmode=)(?:prefer|require|verify-ca)(?=&|$)/, "$1verify-full");
 
 /** Shared connection settings: fail fast instead of hanging, and keep idle sockets alive. */
 export const connectionOptions = {

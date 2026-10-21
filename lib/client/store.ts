@@ -31,7 +31,8 @@ export class ApiError extends Error {
   }
 }
 
-const isNetworkError = (e: unknown) => e instanceof TypeError;
+const isNetworkError = (e: unknown) =>
+  e instanceof TypeError || (e instanceof DOMException && (e.name === "TimeoutError" || e.name === "AbortError"));
 /** The server or its database is briefly unavailable: worth retrying, not undoing. */
 const isUnavailable = (e: unknown) => e instanceof ApiError && e.status >= 502 && e.status <= 504;
 
@@ -115,9 +116,11 @@ function retryLater() {
 }
 
 let flushing: Promise<void> | null = null;
+let inFlight = false; // a change sent directly by send() that hasn't settled yet
 export function flushOutbox(qc: QueryClient) {
   retryClient = qc;
-  if (flushing || !outbox.length) return flushing ?? Promise.resolve();
+  // A change still in flight goes first; send() flushes the rest when it settles.
+  if (flushing || inFlight || !outbox.length) return flushing ?? Promise.resolve();
   flushing = (async () => {
     try {
       while (outbox.length) {
@@ -140,40 +143,40 @@ export function flushOutbox(qc: QueryClient) {
   return flushing;
 }
 
-// Changes go out one at a time, in order: a later edit never overtakes an earlier one that's
-// still in flight and might yet be queued for a retry. A page being hidden sends at once,
-// since it may not get another chance.
-let lastSend: Promise<unknown> = Promise.resolve();
-function send(m: Mutation): Promise<Record<string, unknown> | null> {
-  if (typeof document !== "undefined" && document.visibilityState === "hidden") return sendNow(m);
-  const run = lastSend.then(() => sendNow(m));
-  lastSend = run.catch(() => {});
-  return run;
-}
-
-async function sendNow(m: Mutation): Promise<Record<string, unknown> | null> {
-  if (outbox.length || (typeof navigator !== "undefined" && !navigator.onLine)) {
+// Changes go out one at a time, in order. While one is in flight (or others are already queued, or
+// the device is offline), later changes wait in the persisted outbox rather than in memory, so
+// closing the app can't lose them and a slow or failed request can't be overtaken.
+async function send(m: Mutation): Promise<Record<string, unknown> | null> {
+  if (inFlight || flushing || outbox.length || (typeof navigator !== "undefined" && !navigator.onLine)) {
     outbox.push(m);
     saveOutbox();
     return null;
   }
+  inFlight = true;
+  let ok = false;
   try {
     const res = await api<{ row: Record<string, unknown> | null }>("/api/mutate", {
       method: "POST",
       body: JSON.stringify(m),
       keepalive: true,
+      signal: AbortSignal.timeout(30_000),
     });
+    ok = true;
     return res.row;
   } catch (e) {
-    // Offline, briefly unavailable, or signed out mid-edit (cookie expired or the code
-    // changed): keep the change and replay it later or once the device is unlocked again.
+    // Offline, briefly unavailable, timed out, or signed out mid-edit (cookie expired or the
+    // code changed): keep the change, ahead of any queued behind it, and replay it later or
+    // once the device is unlocked again.
     if (isNetworkError(e) || isUnavailable(e) || (e instanceof ApiError && e.status === 401)) {
-      outbox.push(m);
+      outbox.unshift(m);
       saveOutbox();
       if (!(e instanceof ApiError && e.status === 401)) retryLater();
       return null;
     }
     throw e;
+  } finally {
+    inFlight = false;
+    if (ok && outbox.length && retryClient) void flushOutbox(retryClient);
   }
 }
 

@@ -28,7 +28,11 @@ export function setupProblem(): string | null {
       ? "The unlock code isn't set up yet. Add APP_PIN in Vercel, then redeploy."
       : "The unlock code isn't set up yet. Set APP_PIN to a 4–12 digit code, then restart.";
   }
-  if (!sessionSecret()) return "Set SESSION_SECRET to a random string of at least 32 characters, then restart.";
+  if (!sessionSecret()) {
+    return process.env.VERCEL
+      ? "DATABASE_URL isn't set. Connect the Neon database in Vercel → Storage, then redeploy."
+      : "Set SESSION_SECRET to a random string of at least 32 characters, then restart.";
+  }
   return null;
 }
 

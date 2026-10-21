@@ -13,11 +13,12 @@ if (process.argv.includes("--on-build") && process.env.VERCEL_ENV !== "productio
   process.exit(0);
 }
 
-// pg treats sslmode=require as verify-full already; saying so avoids its warning (as lib/db.ts does).
-const url = (process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL)?.replace(
-  /([?&]sslmode=)(?:prefer|require|verify-ca)(?=&|$)/,
-  "$1verify-full",
-);
+// pg treats sslmode=require as verify-full already; saying so avoids its warning (as lib/db.ts does,
+// which also leaves uselibpqcompat=true URLs alone).
+const rawUrl = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
+const url = rawUrl && !/[?&]uselibpqcompat=true(?=&|$)/i.test(rawUrl)
+  ? rawUrl.replace(/([?&]sslmode=)(?:prefer|require|verify-ca)(?=&|$)/, "$1verify-full")
+  : rawUrl;
 if (!url) {
   console.error("Set DATABASE_URL first (connect Neon in Vercel → Storage; locally: vercel env pull .env.local)");
   process.exit(1);
