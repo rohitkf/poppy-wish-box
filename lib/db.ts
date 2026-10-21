@@ -13,8 +13,12 @@ function connectionString(unpooled = false) {
     ? process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL
     : process.env.DATABASE_URL;
   if (!url) throw new Error("Missing DATABASE_URL (connect a Neon Postgres database in Vercel → Storage)");
-  return url;
+  return strictSsl(url);
 }
+
+// pg 8 already treats sslmode=require (what Neon hands out), prefer and verify-ca as verify-full,
+// and warns about it on every new connection. Asking for verify-full keeps that behaviour, quietly.
+const strictSsl = (url: string) => url.replace(/([?&]sslmode=)(?:prefer|require|verify-ca)(?=&|$)/, "$1verify-full");
 
 /** Shared connection settings: fail fast instead of hanging, and keep idle sockets alive. */
 export const connectionOptions = {

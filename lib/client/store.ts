@@ -140,7 +140,18 @@ export function flushOutbox(qc: QueryClient) {
   return flushing;
 }
 
-async function send(m: Mutation): Promise<Record<string, unknown> | null> {
+// Changes go out one at a time, in order: a later edit never overtakes an earlier one that's
+// still in flight and might yet be queued for a retry. A page being hidden sends at once,
+// since it may not get another chance.
+let lastSend: Promise<unknown> = Promise.resolve();
+function send(m: Mutation): Promise<Record<string, unknown> | null> {
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") return sendNow(m);
+  const run = lastSend.then(() => sendNow(m));
+  lastSend = run.catch(() => {});
+  return run;
+}
+
+async function sendNow(m: Mutation): Promise<Record<string, unknown> | null> {
   if (outbox.length || (typeof navigator !== "undefined" && !navigator.onLine)) {
     outbox.push(m);
     saveOutbox();

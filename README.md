@@ -15,7 +15,7 @@ store for photos. The same app also ships as a **Docker image** that runs anywhe
 
 | Piece | Implementation |
 |---|---|
-| Access | A numeric code (`APP_PIN`) → `/api/unlock`, 5 wrong tries then a 15‑minute pause per IP → signed httpOnly cookie (60 days). A deployment holds one shared space |
+| Access | A numeric code (`APP_PIN`) → `/api/unlock` → signed httpOnly cookie (60 days, renewed whenever the app is opened). 5 wrong tries pause one network for 15 minutes; 30 tries from all networks within 15 minutes pause entry for everyone (unlocked devices keep working). A deployment holds one shared space |
 | Data | Postgres (`db/schema.sql`). The browser never talks to the database: every route checks the cookie, validates input and scopes queries to the space |
 | Live sync | Postgres triggers `pg_notify` on every change → `/api/events` (Server‑Sent Events, one shared `LISTEN` per function instance) → each device merges the row into its cache and highlights changes made by the other person |
 | Conflicts | Only changed fields are sent; custom fields merge per key in `jsonb`, so edits to different fields never overwrite each other |
@@ -42,7 +42,7 @@ store for photos. The same app also ships as a **Docker image** that runs anywhe
 
 ```bash
 npm install
-cp .env.example .env.local   # point DATABASE_URL at any Postgres 14+, set APP_PIN
+cp .env.example .env.local   # point DATABASE_URL at any Postgres 14+, set APP_PIN and SESSION_SECRET
 npm run setup                # schema + space (production builds do this themselves)
 npm run dev
 ```
@@ -52,8 +52,8 @@ Photos need `BLOB_READ_WRITE_TOKEN`. Everything else works with a plain local Po
 Checks: `npm run lint`, `npm run typecheck`, `npm run build`, and the API tests against a running server:
 
 ```bash
-APP_PIN=135790 TRUSTED_IP_HEADER=x-real-ip npm start        # in one terminal, after npm run build
-APP_PIN=135790 npm test                                      # in another
+APP_PIN=135790 SESSION_SECRET=$(openssl rand -hex 32) TRUSTED_IP_HEADER=x-real-ip npm start   # after npm run build
+APP_PIN=135790 npm test                                                                    # in another terminal
 ```
 
 The tests need a fresh database each run (the last one pauses unlocking for 15 minutes).
@@ -64,7 +64,7 @@ The image is a standalone Next.js server (Node 24, non-root, with a health check
 applies the schema, creates the space the first time, then serves on port 3000.
 
 ```bash
-APP_PIN=123456 docker compose up --build        # Postgres + the app on http://localhost:3000
+APP_PIN=123456 SESSION_SECRET=$(openssl rand -hex 32) docker compose up --build   # Postgres + the app on http://localhost:3000
 ```
 
 Released images are published for every merge into `main`:
@@ -80,7 +80,7 @@ docker run -p 3000:3000 \
 | `DATABASE_URL` | Yes | Postgres 14+ connection string |
 | `DATABASE_URL_UNPOOLED` | No | Direct connection for live sync and setup, if `DATABASE_URL` goes through a pooler |
 | `APP_PIN` | Yes | The 4–12 digit unlock code |
-| `SESSION_SECRET` | Recommended | Long random string that signs the session cookie (defaults to `DATABASE_URL`). Changing it signs every device out |
+| `SESSION_SECRET` | Yes (outside Vercel) | At least 32 random characters (`openssl rand -hex 32`) that sign the session cookie. Changing it signs every device out. On Vercel it's ignored: the key comes from `DATABASE_URL` |
 | `TRUSTED_IP_HEADER` | Behind a proxy | The header your proxy sets to the client's IP, e.g. `x-real-ip`, or `x-forwarded-for` (its last entry is used). Without it every visitor shares one lockout counter. Leave it unset if nothing in front sets it, or clients could forge it |
 | `BLOB_READ_WRITE_TOKEN` | For photos | A private Vercel Blob store |
 | `PG_POOL_MAX` | No | Database connections per instance (default 5) |
@@ -146,8 +146,12 @@ Dockerfile, docker-compose.yml, .github/workflows/
   reconnects and refetches, so nothing is missed. A tab hidden for a minute closes its stream
   and catches up when it's shown again, so a forgotten tab doesn't keep the server and database awake.
 - Uploading photos needs a connection. Other edits queue offline.
-- The code is the only key, and a short one: the lockout allows 5 tries per 15 minutes per network,
-  but can't stop someone guessing from many networks. While the repo is public, its Deployments
-  list shows the app's address, so a private repo keeps it from strangers.
-  *Settings → Lock this device* signs one device out; changing `APP_PIN` and redeploying signs out
-  all of them. Vercel only applies changed environment variables to new deployments.
+- The code is the only key, and a short one: the lockout allows 5 tries per 15 minutes per network
+  and 30 from all networks together. The flip side: someone with a handful of networks can keep entry
+  paused for everyone. Devices already unlocked keep working (opening the app renews their cookie),
+  but a new phone or a locked device has to wait. Don't change `APP_PIN` during a pause: that signs
+  every device out while nobody can unlock. To end a pause now, run
+  `delete from unlock_attempts where ip = '*'` in the Neon SQL editor.
+- While the repo is public, its Deployments list shows the app's address, so a private repo keeps it
+  from strangers. *Settings → Lock this device* signs one device out; changing `APP_PIN` and
+  redeploying signs out all of them. Vercel only applies changed environment variables to new deployments.

@@ -26,7 +26,9 @@ COPY --from=build --chown=node:node /app/db ./db
 COPY --from=build --chown=node:node /app/scripts/setup.mjs ./scripts/setup.mjs
 USER node
 EXPOSE 3000
+# Liveness only: a database check every 30 s would keep a serverless Postgres from ever sleeping.
+# (Start-up already waited for the database; /api/health/ready is there for load balancers.)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 # Set SKIP_DB_SETUP=1 when a separate job applies the schema. If setup fails, the container exits.
 CMD ["sh", "-c", "if [ \"$SKIP_DB_SETUP\" != 1 ]; then node scripts/setup.mjs || exit 1; fi; exec node server.js"]

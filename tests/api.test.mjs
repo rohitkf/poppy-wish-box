@@ -1,5 +1,6 @@
 // Black-box tests against a running build, with Node's built-in test runner:
-//   APP_PIN=135790 TRUSTED_IP_HEADER=x-real-ip npm start   (needs DATABASE_URL; run `npm run setup` first)
+//   APP_PIN=135790 SESSION_SECRET=<32+ characters> TRUSTED_IP_HEADER=x-real-ip npm start
+//     (needs DATABASE_URL; run `npm run setup` first)
 //   BASE_URL=http://localhost:3000 APP_PIN=135790 npm test
 // CI runs them against `next start` and against the Docker image, each on a fresh database.
 // The last test pauses unlocking for everyone for 15 minutes, so a rerun needs a fresh
@@ -216,15 +217,14 @@ test("live sync reports the build and streams changes", async () => {
 });
 
 // Keep this last: it pauses unlocking for everyone.
-test("many wrong codes from many networks pause entry for everyone, not for unlocked devices", async () => {
+test("a burst of wrong codes from many networks can't get past the limit for everyone", async () => {
   const cookie = await unlock();
-  let paused = null;
-  for (let i = 0; i < 60 && !paused; i++) {
-    const res = await tryCode(WRONG, freshIp());
-    if (res.status === 429) paused = await res.json();
-  }
-  assert.ok(paused, "a pause for everyone kicked in");
-  assert.match(paused.error, /paused/);
+  const replies = await Promise.all(
+    Array.from({ length: 90 }, () => tryCode(WRONG, freshIp()).then(async (r) => ({ status: r.status, body: await r.json() }))),
+  );
+  const compared = replies.filter((r) => r.status === 401).length;
+  assert.ok(compared <= 30, `${compared} codes were compared`);
+  assert.ok(replies.some((r) => r.status === 429 && /paused/.test(r.body.error)), "a pause for everyone kicked in");
   assert.equal((await tryCode(PIN, freshIp())).status, 429, "even the right code waits");
   assert.equal((await request("/api/data", { cookie })).status, 200, "unlocked devices keep working");
 });

@@ -20,6 +20,7 @@ env:
   NEXT_TELEMETRY_DISABLED: 1
   # A throwaway code for the test servers; the real one lives only in Vercel.
   APP_PIN: "135790"
+  SESSION_SECRET: ci-only-session-secret-0123456789abcdef
   # The tests simulate different networks with this header.
   TRUSTED_IP_HEADER: x-real-ip
 

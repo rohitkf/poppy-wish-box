@@ -143,7 +143,9 @@ export function SpaceProvider({
       if (document.visibilityState === "hidden") idle = setTimeout(disconnect, 60_000);
       else connect();
     };
-    connect();
+    // A tab opened in the background connects when it's first shown, and catches up then.
+    if (document.visibilityState === "hidden") firstReady = false;
+    else connect();
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", disconnect);
     window.addEventListener("pageshow", onVisibility);
