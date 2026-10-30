@@ -1,11 +1,10 @@
-# Publishes the Docker image to GitHub Container Registry on every release (a merge into main):
+# Builds and publishes the Docker image to GitHub Container Registry, on demand:
+#   GitHub → Actions → Release image → Run workflow (on main)
 #   docker pull ghcr.io/rohitkf/poppy-wish-box:latest
-# Vercel deploys main on its own; the image is for running the app anywhere else.
+# Production runs on Vercel, so this doesn't run on every release; run it when you want a fresh image.
 name: Release image
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:

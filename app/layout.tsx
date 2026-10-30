@@ -1,16 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Instrument_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  axes: ["opsz"],
+// Self-hosted from npm (pinned in the lockfile), so builds never depend on Google Fonts being up.
+const fraunces = localFont({
+  src: "../node_modules/@fontsource-variable/fraunces/files/fraunces-latin-opsz-normal.woff2",
+  weight: "100 900",
   variable: "--font-fraunces",
   display: "swap",
 });
-const instrument = Instrument_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+const instrument = localFont({
+  src: "../node_modules/@fontsource-variable/instrument-sans/files/instrument-sans-latin-wght-normal.woff2",
+  weight: "400 700",
   variable: "--font-instrument",
   display: "swap",
 });
