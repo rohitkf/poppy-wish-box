@@ -7,7 +7,8 @@ import { Avatar, HereIndicator, StatusPill, tileStyle } from "@/components/ui/bi
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { Sheet } from "@/components/ui/sheet";
 import { useSpace } from "@/components/app/SpaceProvider";
-import { DoneToggle, ItemRow } from "@/components/app/ItemRow";
+import { DoneToggle, fieldContent, ItemRow } from "@/components/app/ItemRow";
+import { BUILTIN_ROW_FIELDS, type RowField, useRowFields } from "@/lib/client/rowFields";
 import { ListEditor } from "@/components/app/ListEditor";
 import { FieldsEditor } from "@/components/app/FieldsEditor";
 import { filterItems, NO_FILTERS, sortItems, SORTS, type Filters, type SortKey } from "@/lib/client/items";
@@ -52,6 +53,11 @@ export function ListView({ list }: { list: List }) {
   const [editingFields, setEditingFields] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const rowFields = useRowFields(list.id);
+  const customFields = useMemo(
+    () => data.fields.filter((f) => f.list_id === list.id).sort((a, b) => a.position - b.position),
+    [data.fields, list.id],
+  );
 
   const setSort = (s: SortKey) => {
     setSortState(s);
@@ -103,6 +109,28 @@ export function ListView({ list }: { list: List }) {
     </Menu>
   );
 
+  const fieldsMenu = (
+    <Menu>
+      <MenuTrigger className="flex h-10 items-center gap-1 rounded-[10px] px-2 text-[13px] font-medium text-ink hover:bg-sunken lg:border lg:border-line-2 lg:px-3.5 lg:text-[14px] lg:font-normal">
+        Show: {rowFields.fields.length}
+        <Icon.Chevron size={14} />
+      </MenuTrigger>
+      <MenuContent>
+        <MenuLabel>Show on items</MenuLabel>
+        {[
+          ...BUILTIN_ROW_FIELDS,
+          ...customFields.map((f) => ({ key: `custom:${f.key}` as RowField, label: f.label })),
+        ].map((f) => (
+          <MenuItem key={f.key} keepOpen checked={rowFields.fields.includes(f.key)} onSelect={() => rowFields.toggle(f.key)}>
+            {f.label}
+          </MenuItem>
+        ))}
+        <MenuSeparator />
+        <MenuItem onSelect={rowFields.reset}>Reset to default</MenuItem>
+      </MenuContent>
+    </Menu>
+  );
+
   return (
     <div className="flex min-h-full flex-col pb-28 lg:pb-10">
       {/* Mobile header */}
@@ -135,6 +163,7 @@ export function ListView({ list }: { list: List }) {
           {list.name}
         </h1>
         <div className="hidden items-center gap-2 lg:flex">
+          {fieldsMenu}
           {sortMenu}
           <ListOptions
             onEdit={() => setEditing(true)}
@@ -206,7 +235,10 @@ export function ListView({ list }: { list: List }) {
         <span>
           {shown.length === open.length ? `${open.length} open` : `${shown.length} of ${open.length} open`}
         </span>
-        {sortMenu}
+        <span className="flex items-center">
+          {fieldsMenu}
+          {sortMenu}
+        </span>
       </div>
 
       {open.length === 0 ? (
@@ -223,11 +255,11 @@ export function ListView({ list }: { list: List }) {
           <ul className="flex flex-col gap-0.5 px-3 lg:hidden">
             <AnimatePresence initial={false}>
               {shown.map((item) => (
-                <ItemRow key={item.id} item={item} onOpen={() => openItem(item.id)} selected={route.item === item.id} />
+                <ItemRow key={item.id} item={item} fields={rowFields.fields} onOpen={() => openItem(item.id)} selected={route.item === item.id} />
               ))}
             </AnimatePresence>
           </ul>
-          <ItemTable items={shown} selectedId={route.item} onOpen={openItem} />
+          <ItemTable items={shown} fields={rowFields.fields} selectedId={route.item} onOpen={openItem} />
         </>
       )}
 
@@ -254,7 +286,7 @@ export function ListView({ list }: { list: List }) {
                 className="-mx-2 flex flex-col gap-0.5 overflow-hidden"
               >
                 {done.map((item) => (
-                  <ItemRow key={item.id} item={item} onOpen={() => openItem(item.id)} selected={route.item === item.id} />
+                  <ItemRow key={item.id} item={item} fields={rowFields.fields} onOpen={() => openItem(item.id)} selected={route.item === item.id} />
                 ))}
               </motion.ul>
             ) : null}
@@ -352,11 +384,17 @@ function EmptyState({ list, onFocus }: { list: List; onFocus: () => void }) {
   );
 }
 
-function TableRow({ item, selected, onOpen }: { item: Item; selected: boolean; onOpen: () => void }) {
-  const { data } = useSpace();
+function TableRow({ item, fields, selected, onOpen }: { item: Item; fields: RowField[]; selected: boolean; onOpen: () => void }) {
+  const { data, me } = useSpace();
   const hl = useHighlight(item.id);
-  const labels = data.space.priority_labels;
   const cell = "px-2.5 py-3 border-t border-line";
+  const ctx = {
+    labels: data.space.priority_labels,
+    currency: data.space.default_currency,
+    me,
+    members: data.space.member_names,
+    defs: data.fields.filter((f) => f.list_id === item.list_id),
+  };
   return (
     <tr
       onClick={onOpen}
@@ -369,7 +407,7 @@ function TableRow({ item, selected, onOpen }: { item: Item; selected: boolean; o
       <td className={cn(cell, "w-12")} onClick={(e) => e.stopPropagation()}>
         <DoneToggle item={item} size={20} />
       </td>
-      <td className={cn(cell, "font-semibold")}>
+      <td className={cn(cell, "min-w-[180px] font-semibold")}>
         <button type="button" onClick={onOpen} className="text-left">
           {item.title}
         </button>
@@ -377,24 +415,35 @@ function TableRow({ item, selected, onOpen }: { item: Item; selected: boolean; o
           <span className="block text-[12px] font-medium text-teal-text">Just {hl === "added" ? "added" : "edited"}</span>
         ) : null}
       </td>
-      <td className={cell}>
-        <StatusPill status={item.status} />
-      </td>
-      <td className={cn(cell, item.priority === 2 && "font-semibold text-clay-ink")}>
-        {item.priority !== null ? labels[item.priority] : "—"}
-      </td>
-      <td className={cell}>{item.price !== null ? money(item.price, item.currency ?? data.space.default_currency) : "—"}</td>
-      <td className={cell}>{item.target_date ? targetDate(item.target_date) : item.status === "done" ? shortDate(item.done_at) : "—"}</td>
-      <td className={cell}>
-        {item.added_by ? <Avatar name={item.added_by} members={data.space.member_names} size={24} ring="none" /> : "—"}
-      </td>
+      {fields.map((f) => (
+        <td key={f} className={cn(cell, "max-w-[220px] whitespace-nowrap text-ink-2")}>
+          <span className="flex min-w-0 items-center">{fieldContent(f, item, ctx, true) ?? "—"}</span>
+        </td>
+      ))}
     </tr>
   );
 }
 
-function ItemTable({ items, selectedId, onOpen }: { items: Item[]; selectedId?: string; onOpen: (id: string) => void }) {
+function ItemTable({
+  items,
+  fields,
+  selectedId,
+  onOpen,
+}: {
+  items: Item[];
+  fields: RowField[];
+  selectedId?: string;
+  onOpen: (id: string) => void;
+}) {
+  const { data } = useSpace();
+  const listId = items[0]?.list_id;
+  const defs = data.fields.filter((f) => f.list_id === listId).sort((a, b) => a.position - b.position);
+  const columns: { key: RowField; label: string; short?: string }[] = [
+    ...BUILTIN_ROW_FIELDS,
+    ...defs.map((d) => ({ key: `custom:${d.key}` as RowField, label: d.label })),
+  ].filter((c) => fields.includes(c.key));
   return (
-    <div className="hidden px-10 pt-4 lg:block">
+    <div className="hidden overflow-x-auto px-10 pt-4 lg:block">
       <table className="w-full border-collapse text-[14px]">
         <thead>
           <tr className="text-left text-[12px] tracking-[0.6px] text-ink-3 uppercase">
@@ -402,16 +451,22 @@ function ItemTable({ items, selectedId, onOpen }: { items: Item[]; selectedId?: 
               <span className="sr-only">Done</span>
             </th>
             <th className="px-2.5 py-2 font-semibold">Title</th>
-            <th className="px-2.5 py-2 font-semibold">Status</th>
-            <th className="px-2.5 py-2 font-semibold">Priority</th>
-            <th className="px-2.5 py-2 font-semibold">Budget</th>
-            <th className="px-2.5 py-2 font-semibold">Date</th>
-            <th className="px-2.5 py-2 font-semibold">By</th>
+            {columns.map((c) => (
+              <th key={c.key} className="px-2.5 py-2 font-semibold whitespace-nowrap">
+                {c.short ?? c.label}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
           {items.map((item) => (
-            <TableRow key={item.id} item={item} selected={selectedId === item.id} onOpen={() => onOpen(item.id)} />
+            <TableRow
+              key={item.id}
+              item={item}
+              fields={columns.map((c) => c.key)}
+              selected={selectedId === item.id}
+              onOpen={() => onOpen(item.id)}
+            />
           ))}
         </tbody>
       </table>
