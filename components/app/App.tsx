@@ -63,9 +63,15 @@ function ErrorScreen({ retry }: { retry: () => void }) {
 function SyncBanner() {
   const { online, live } = useSpace();
   const queued = useOutboxSize();
+  // A change waiting behind another normally syncs within a second: only mention a queue that lingers.
+  const [lingering, setLingering] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => setLingering(queued), queued ? 1500 : 0);
+    return () => clearTimeout(t);
+  }, [queued]);
   let text: string | null = null;
   if (!online) text = queued ? `Offline · ${queued} change${queued === 1 ? "" : "s"} will sync` : "Offline · showing saved lists";
-  else if (queued) text = `Syncing ${queued} change${queued === 1 ? "" : "s"}…`;
+  else if (queued && lingering) text = `Syncing ${queued} change${queued === 1 ? "" : "s"}…`;
   else if (!live) text = null;
   return (
     <AnimatePresence>

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { appPin } from "@/lib/session";
+import { appPin, setupProblem } from "@/lib/session";
 import { UnlockForm } from "./UnlockForm";
 
 export const metadata: Metadata = { title: "Unlock · Ours" };
@@ -20,7 +20,7 @@ export default function UnlockPage() {
             One list for the two of you. Places to go, things to buy, plans to make.
           </p>
         </div>
-        <UnlockForm length={appPin()?.length ?? null} />
+        <UnlockForm length={setupProblem() ? null : (appPin()?.length ?? null)} />
       </div>
       <div className="flex items-center gap-2 text-[13px] text-ink-3">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">

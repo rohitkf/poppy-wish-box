@@ -1,0 +1,89 @@
+# Checks every push to develop and every release PR into main.
+# Deploys stay with Vercel's Git integration (develop → previews, main → production).
+name: CI
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: 1
+  # A throwaway code for the test servers; the real one lives only in Vercel.
+  APP_PIN: "135790"
+  SESSION_SECRET: ci-only-session-secret-0123456789abcdef
+  # The tests simulate different networks with this header.
+  TRUSTED_IP_HEADER: x-real-ip
+
+jobs:
+  verify:
+    name: Lint, types, build, tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ours
+          POSTGRES_PASSWORD: ours
+          POSTGRES_DB: ours
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ours -d ours"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      DATABASE_URL: postgres://ours:ours@localhost:5432/ours
+      APP_BUILD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Apply the schema twice (it must be idempotent)
+        run: npm run setup && npm run setup
+      - name: Start the server
+        run: |
+          npm start > server.log 2>&1 &
+          for i in $(seq 1 60); do curl -fs http://localhost:3000/api/health/ready && exit 0; sleep 1; done
+          exit 1
+      - run: npm test
+      - name: Server log
+        if: failure()
+        run: cat server.log
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - name: Build the image and start it with Postgres
+        run: docker compose up --build --detach --wait --wait-timeout 180
+        env:
+          APP_BUILD: ${{ github.sha }}
+      - name: Run the tests against the container
+        run: npm test
+        env:
+          BASE_URL: http://localhost:3000
+      - name: Container logs
+        if: always()
+        run: docker compose logs --no-color
+      - if: always()
+        run: docker compose down --volumes

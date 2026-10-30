@@ -3,7 +3,8 @@ import { put } from "@vercel/blob";
 import { db } from "@/lib/db";
 import { isUnlocked, unauthorized } from "@/lib/session";
 import { currentSpaceId, noSpace } from "@/lib/space";
-import { uuid } from "@/lib/server-data";
+import { HttpError, uuid } from "@/lib/server-data";
+import { errorHeaders, readForm } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,8 @@ export async function POST(req: NextRequest) {
   if (!spaceId) return noSpace();
 
   try {
-    const form = await req.formData();
+    // A little headroom over MAX_BYTES for the other form fields.
+    const form = await readForm(req, MAX_BYTES + 64 * 1024);
     const file = form.get("file");
     const id = uuid(form.get("id"));
     const itemId = uuid(form.get("itemId"), "item");
@@ -55,6 +57,10 @@ export async function POST(req: NextRequest) {
     );
     return Response.json({ ok: true, row: rows[0] });
   } catch (e) {
+    if (e instanceof HttpError) {
+      const error = e.status === 413 ? "That photo is too large." : e.message;
+      return Response.json({ error }, { status: e.status, headers: errorHeaders(e) });
+    }
     const msg = e instanceof Error ? e.message : "";
     if (msg.startsWith("Invalid")) return Response.json({ error: msg }, { status: 400 });
     console.error(e);

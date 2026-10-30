@@ -28,16 +28,22 @@ export function MenuItem({
   danger,
   checked,
   icon,
+  keepOpen,
 }: {
   children: React.ReactNode;
   onSelect: () => void;
   danger?: boolean;
   checked?: boolean;
   icon?: React.ReactNode;
+  /** Leave the menu open after choosing, for menus where several items are toggled. */
+  keepOpen?: boolean;
 }) {
   return (
     <DM.Item
-      onSelect={onSelect}
+      onSelect={(e) => {
+        if (keepOpen) e.preventDefault();
+        onSelect();
+      }}
       className={cn(
         "flex min-h-11 cursor-pointer select-none items-center gap-3 rounded-xl px-3 text-[15px] outline-none data-[highlighted]:bg-sunken",
         danger && "text-danger",

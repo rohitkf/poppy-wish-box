@@ -69,6 +69,7 @@ function strArray(v: unknown, name: string, maxItems: number, maxLen: number): s
 
 function customValues(v: unknown): Record<string, CustomValue> {
   if (!v || typeof v !== "object" || Array.isArray(v)) return bad("Invalid custom fields");
+  if (Object.keys(v).length > 50) return bad("Too many custom fields");
   const out: Record<string, CustomValue> = {};
   for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
     if (!/^[a-z0-9_]{1,48}$/.test(k)) bad("Invalid custom field key");

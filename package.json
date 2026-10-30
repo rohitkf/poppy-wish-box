@@ -2,13 +2,17 @@
   "name": "ours",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/setup.mjs --on-build && next build",
+    "build": "next build && node scripts/setup.mjs --on-build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "setup": "node --env-file-if-exists=.env.local scripts/setup.mjs"
+    "setup": "node --env-file-if-exists=.env.local scripts/setup.mjs",
+    "test": "node --test \"tests/*.test.mjs\""
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.23",
@@ -22,7 +26,7 @@
     "clsx": "^2.1.1",
     "framer-motion": "^13.4.6",
     "jose": "^6.2.13",
-    "next": "^16.3.7",
+    "next": "^16.4.2",
     "pg": "^8.23.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
@@ -36,7 +40,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "eslint": "^9.39.5",
-    "eslint-config-next": "^16.3.7",
+    "eslint-config-next": "^16.4.2",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3"
   }

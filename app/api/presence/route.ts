@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
+import { errorHeaders, readJson } from "@/lib/http";
+import { HttpError } from "@/lib/server-data";
 import { isUnlocked, unauthorized } from "@/lib/session";
 import { currentSpaceId, noSpace } from "@/lib/space";
 
@@ -10,13 +12,21 @@ export async function POST(req: NextRequest) {
   if (!(await isUnlocked(req))) return unauthorized();
   const spaceId = await currentSpaceId();
   if (!spaceId) return noSpace();
-  const body = await req.json().catch(() => null);
+  let body: { deviceId?: unknown; name?: unknown; leave?: unknown } | null;
+  try {
+    body = (await readJson(req, 4096)) as typeof body;
+  } catch (e) {
+    if (e instanceof HttpError) {
+      return Response.json({ error: e.message }, { status: e.status, headers: errorHeaders(e) });
+    }
+    throw e;
+  }
   const deviceId = typeof body?.deviceId === "string" ? body.deviceId.slice(0, 64) : "";
   const name = typeof body?.name === "string" ? body.name.trim().slice(0, 40) : "";
   if (!deviceId) return Response.json({ error: "Bad request" }, { status: 400 });
 
   const pool = db();
-  if (body.leave || !name) {
+  if (body?.leave || !name) {
     await pool.query("delete from presence where space_id = $1 and device_id = $2", [spaceId, deviceId]);
   } else {
     await pool.query(

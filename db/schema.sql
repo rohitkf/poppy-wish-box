@@ -17,6 +17,9 @@ create table if not exists spaces (
   created_at timestamptz not null default now()
 );
 
+-- Left over from the passphrase sign-in; the triggers below would broadcast it.
+alter table spaces drop column if exists passcode_hash;
+
 create table if not exists lists (
   id uuid primary key default gen_random_uuid(),
   space_id uuid not null references spaces (id) on delete cascade,

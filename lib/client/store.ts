@@ -31,7 +31,10 @@ export class ApiError extends Error {
   }
 }
 
-const isNetworkError = (e: unknown) => e instanceof TypeError;
+const isNetworkError = (e: unknown) =>
+  e instanceof TypeError || (e instanceof DOMException && (e.name === "TimeoutError" || e.name === "AbortError"));
+/** The server or its database is briefly unavailable: worth retrying, not undoing. */
+const isUnavailable = (e: unknown) => e instanceof ApiError && e.status >= 502 && e.status <= 504;
 
 function goToUnlock() {
   if (typeof window !== "undefined" && window.location.pathname !== "/unlock") window.location.replace("/unlock");
@@ -97,21 +100,41 @@ export function useOutboxSize() {
   );
 }
 
+// Retries while the device thinks it's online but the server can't take the change yet
+// (no "online" event will come): 5 s, doubling up to a minute.
+let retryClient: QueryClient | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let retryDelay = 5000;
+function retryLater() {
+  if (retryTimer || !retryClient) return;
+  const qc = retryClient;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    flushOutbox(qc);
+  }, retryDelay);
+  retryDelay = Math.min(retryDelay * 2, 60_000);
+}
+
 let flushing: Promise<void> | null = null;
+let inFlight = false; // a change sent directly by send() that hasn't settled yet
 export function flushOutbox(qc: QueryClient) {
-  if (flushing || !outbox.length) return flushing ?? Promise.resolve();
+  retryClient = qc;
+  // A change still in flight goes first; send() flushes the rest when it settles.
+  if (flushing || inFlight || !outbox.length) return flushing ?? Promise.resolve();
   flushing = (async () => {
     try {
       while (outbox.length) {
         try {
           await api("/api/mutate", { method: "POST", body: JSON.stringify(outbox[0]) });
         } catch (e) {
-          if (isNetworkError(e) || (e instanceof ApiError && e.status === 401)) return;
+          if (e instanceof ApiError && e.status === 401) return; // replayed after unlocking
+          if (isNetworkError(e) || isUnavailable(e)) return retryLater();
           showToast({ message: `A queued change couldn't be saved: ${(e as Error).message}`, tone: "error" });
         }
         outbox.shift();
         saveOutbox();
       }
+      retryDelay = 5000;
       await qc.invalidateQueries({ queryKey: DATA_KEY });
     } finally {
       flushing = null;
@@ -120,28 +143,40 @@ export function flushOutbox(qc: QueryClient) {
   return flushing;
 }
 
+// Changes go out one at a time, in order. While one is in flight (or others are already queued, or
+// the device is offline), later changes wait in the persisted outbox rather than in memory, so
+// closing the app can't lose them and a slow or failed request can't be overtaken.
 async function send(m: Mutation): Promise<Record<string, unknown> | null> {
-  if (outbox.length || (typeof navigator !== "undefined" && !navigator.onLine)) {
+  if (inFlight || flushing || outbox.length || (typeof navigator !== "undefined" && !navigator.onLine)) {
     outbox.push(m);
     saveOutbox();
     return null;
   }
+  inFlight = true;
+  let ok = false;
   try {
     const res = await api<{ row: Record<string, unknown> | null }>("/api/mutate", {
       method: "POST",
       body: JSON.stringify(m),
       keepalive: true,
+      signal: AbortSignal.timeout(30_000),
     });
+    ok = true;
     return res.row;
   } catch (e) {
-    // Signed out mid-edit (cookie expired or the code changed): keep the change and
-    // replay it once the device is unlocked again.
-    if (isNetworkError(e) || (e instanceof ApiError && e.status === 401)) {
-      outbox.push(m);
+    // Offline, briefly unavailable, timed out, or signed out mid-edit (cookie expired or the
+    // code changed): keep the change, ahead of any queued behind it, and replay it later or
+    // once the device is unlocked again.
+    if (isNetworkError(e) || isUnavailable(e) || (e instanceof ApiError && e.status === 401)) {
+      outbox.unshift(m);
       saveOutbox();
+      if (!(e instanceof ApiError && e.status === 401)) retryLater();
       return null;
     }
     throw e;
+  } finally {
+    inFlight = false;
+    if (ok && outbox.length && retryClient) void flushOutbox(retryClient);
   }
 }
 

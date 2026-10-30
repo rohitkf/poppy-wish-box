@@ -1,0 +1,40 @@
+# The whole app on your machine: Postgres + the production image.
+#   APP_PIN=123456 SESSION_SECRET=$(openssl rand -hex 32) docker compose up --build
+# Then open http://localhost:3000. Photos also need BLOB_READ_WRITE_TOKEN.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ours
+      POSTGRES_PASSWORD: ours
+      POSTGRES_DB: ours
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ours -d ours"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build:
+      context: .
+      args:
+        APP_BUILD: ${APP_BUILD:-local}
+    environment:
+      DATABASE_URL: postgres://ours:ours@db:5432/ours
+      APP_PIN: ${APP_PIN:?Set APP_PIN to a 4–12 digit code}
+      # Signs the unlock cookie. This file's DATABASE_URL is public, so it can't double as the key.
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET to a random string of at least 32 characters}
+      BLOB_READ_WRITE_TOKEN: ${BLOB_READ_WRITE_TOKEN:-}
+      # Put a reverse proxy in front for real use, and name the header it sets for the client IP.
+      TRUSTED_IP_HEADER: ${TRUSTED_IP_HEADER:-}
+    ports:
+      # Only this machine (and a reverse proxy on it) can reach the app.
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:
