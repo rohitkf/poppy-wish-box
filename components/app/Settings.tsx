@@ -6,6 +6,7 @@ import { Segmented, tileStyle } from "@/components/ui/bits";
 import { Sheet } from "@/components/ui/sheet";
 import { useSpace } from "@/components/app/SpaceProvider";
 import { NamePicker } from "@/components/app/NamePicker";
+import { PantrySettings } from "@/components/app/PantrySettings";
 import { useNav } from "@/lib/client/nav";
 import { showToast } from "@/lib/client/toast";
 import { storage } from "@/lib/client/util";
@@ -100,6 +101,10 @@ export function Settings() {
             applyTheme(v);
           }}
         />
+      </Section>
+
+      <Section title="Pantry">
+        <PantrySettings />
       </Section>
 
       <Section title="Shared settings">

@@ -69,3 +69,35 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+
+// Pantry reminders (Web Push). The payload is { title, body, url, tag } from lib/push.ts.
+self.addEventListener("push", (event) => {
+  let msg = { title: "Ours", body: "Something in the pantry needs a look.", url: "/?view=pantry", tag: "ours-expiry" };
+  try {
+    msg = { ...msg, ...(event.data ? event.data.json() : {}) };
+  } catch {
+    /* plain-text or empty payload: keep the default */
+  }
+  event.waitUntil(
+    self.registration.showNotification(msg.title, {
+      body: msg.body,
+      tag: msg.tag,
+      renotify: true,
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { url: msg.url },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = new URL((event.notification.data && event.notification.data.url) || "/?view=pantry", self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+      const win = wins.find((w) => new URL(w.url).origin === self.location.origin);
+      if (win) return win.focus().then((w) => (w && "navigate" in w ? w.navigate(url) : undefined));
+      return self.clients.openWindow(url);
+    }),
+  );
+});

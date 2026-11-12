@@ -23,6 +23,8 @@ store for photos. The same app also ships as a **Docker image** that runs anywhe
 | Photos | Compressed on the phone (≤1600 px JPEG), uploaded to a **private** Blob store, served only through `/api/photos/[id]` after the cookie check |
 | Offline | Last data cached on the device (readable offline); edits made offline queue in order and replay on reconnect; service worker caches the app shell and photos |
 | Updates | Each build carries its commit id; the live-sync stream reports the server's, and an open app on an older build offers *Reload* |
+| Pantry | A second tab for food at home: where it is (Fridge, Freezer, Pantry, or your own places), quantity, category, opened date and expiry. Items sort by urgency: red once past their date, amber within the warning window (3 days by default, set in Settings), then fresh. A banner and badge show what needs using |
+| Reminders | Each phone can opt in (Settings → Pantry) to a morning Web Push notification listing what's expired or close. A daily Vercel Cron job (`vercel.json`) calls `/api/cron/expiry`; each phone gets at most one a day. The push keys are generated once and kept in the database, so there's nothing to configure. On iPhone, add the app to the Home Screen first |
 | Health | `/api/health` (the process is up) and `/api/health/ready` (it can reach the database), both open without the code |
 | UI | Tailwind CSS v4, Radix primitives (shadcn‑style), Framer Motion, TanStack Query. Light and dark themes (follows the system, with a manual override) |
 
@@ -84,7 +86,13 @@ docker run -p 3000:3000 \
 | `TRUSTED_IP_HEADER` | Behind a proxy | The header your proxy sets to the client's IP, e.g. `x-real-ip`, or `x-forwarded-for` (its last entry is used). Without it every visitor shares one lockout counter. Leave it unset if nothing in front sets it, or clients could forge it |
 | `BLOB_READ_WRITE_TOKEN` | For photos | A private Vercel Blob store |
 | `PG_POOL_MAX` | No | Database connections per instance (default 5) |
+| `CRON_SECRET` | No | If set, `/api/cron/expiry` only accepts `Authorization: Bearer <CRON_SECRET>` (Vercel Cron sends it automatically). Without it the route is open, which only lets someone trigger the day's single reminder early |
+| `APP_TIME_ZONE` | No | Time zone for "today" in reminders (default `Europe/London`) |
+| `VAPID_SUBJECT` | No | Contact for push services (`mailto:` or `https:`). Defaults to the Vercel production URL |
 | `SKIP_DB_SETUP` | No | `1` when a separate step applies the schema (`node scripts/setup.mjs`) |
+
+Outside Vercel, schedule the morning reminder yourself, e.g. a daily cron job running
+`curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/expiry`.
 
 Serve it over HTTPS, behind a reverse proxy (Caddy, nginx, a cloud load balancer). The session
 cookie is `Secure`, so plain HTTP only works on `localhost`. The proxy must not buffer

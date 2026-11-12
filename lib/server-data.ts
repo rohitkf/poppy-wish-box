@@ -130,6 +130,24 @@ function fieldCols(p: Record<string, unknown>): Cols {
   return c;
 }
 
+function day(v: unknown, name: string): string | null {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v !== "string" || !DATE.test(v) || Number.isNaN(Date.parse(`${v}T00:00:00Z`))) return bad(`Invalid ${name}`);
+  return v;
+}
+
+function pantryCols(p: Record<string, unknown>): Cols {
+  const c: Cols = {};
+  if ("name" in p) c.name = text(p.name, "Name", 120, { required: true });
+  if ("location" in p) c.location = text(p.location, "Location", 40, { required: true });
+  if ("category" in p) c.category = text(p.category, "Category", 40);
+  if ("quantity" in p) c.quantity = num(p.quantity, "Quantity", { min: 0, max: 99_999_999 });
+  if ("unit" in p) c.unit = text(p.unit, "Unit", 20);
+  if ("expires_on" in p) c.expires_on = day(p.expires_on, "expiry date");
+  if ("opened_on" in p) c.opened_on = day(p.opened_on, "opened date");
+  return c;
+}
+
 function spaceCols(p: Record<string, unknown>): Cols {
   const c: Cols = {};
   if ("name" in p) c.name = text(p.name, "Space name", 60, { required: true });
@@ -141,6 +159,14 @@ function spaceCols(p: Record<string, unknown>): Cols {
   if ("default_currency" in p) {
     const cur = text(p.default_currency, "Currency", 3);
     c.default_currency = cur && /^[A-Za-z]{3}$/.test(cur) ? cur.toUpperCase() : bad("Invalid currency");
+  }
+  if ("pantry_locations" in p) {
+    const locs = strArray(p.pantry_locations, "Locations", 20, 40);
+    c.pantry_locations = locs.length ? locs : bad("Keep at least one location");
+  }
+  if ("expiry_warn_days" in p) {
+    const n = num(p.expiry_warn_days, "warning days", { min: 0, max: 60 });
+    c.expiry_warn_days = n === null || !Number.isInteger(n) ? bad("Invalid warning days") : n;
   }
   return c;
 }
@@ -177,9 +203,9 @@ async function deleteBlobs(urls: string[]) {
 
 export async function loadSpaceData(spaceId: string): Promise<SpaceData> {
   const pool = db();
-  const [space, lists, fields, items, photos, presence] = await Promise.all([
+  const [space, lists, fields, items, photos, presence, pantry] = await Promise.all([
     pool.query(
-      "select id, name, member_names, priority_labels, default_currency from spaces where id = $1",
+      "select id, name, member_names, priority_labels, default_currency, pantry_locations, expiry_warn_days from spaces where id = $1",
       [spaceId],
     ),
     pool.query("select * from lists where space_id = $1 order by position, created_at", [spaceId]),
@@ -193,6 +219,7 @@ export async function loadSpaceData(spaceId: string): Promise<SpaceData> {
       "select device_id, name, last_seen from presence where space_id = $1 and last_seen > now() - interval '90 seconds'",
       [spaceId],
     ),
+    pool.query("select * from pantry_items where space_id = $1 order by expires_on nulls last, created_at", [spaceId]),
   ]);
   if (!space.rows[0]) throw new HttpError(404, "This space no longer exists.");
   return {
@@ -202,6 +229,7 @@ export async function loadSpaceData(spaceId: string): Promise<SpaceData> {
     items: items.rows,
     photos: photos.rows,
     presence: presence.rows,
+    pantry: pantry.rows,
   };
 }
 
@@ -357,7 +385,7 @@ export async function applyMutation(spaceId: string, m: Mutation): Promise<unkno
       params.push(spaceId);
       const { rows } = await pool.query(
         `update spaces set ${set.join(", ")} where id = $${params.length}
-         returning id, name, member_names, priority_labels, default_currency`,
+         returning id, name, member_names, priority_labels, default_currency, pantry_locations, expiry_warn_days`,
         params,
       );
       return rows[0];
@@ -368,6 +396,37 @@ export async function applyMutation(spaceId: string, m: Mutation): Promise<unkno
         [uuid(m.id), spaceId],
       );
       await deleteBlobs(rows.map((r) => r.blob_url));
+      return null;
+    }
+    case "pantry.create": {
+      const it = m.item ?? bad("Missing item");
+      const cols = pantryCols({ location: "Fridge", ...it });
+      if (!cols.name) bad("Name is required");
+      const actor = text(m.actor, "Name", 40);
+      const keys = ["id", "space_id", ...Object.keys(cols), "added_by", "updated_by"];
+      const values = [uuid(it.id), spaceId, ...Object.values(cols), actor, actor];
+      const { rows } = await pool.query(
+        `insert into pantry_items (${keys.join(", ")}) values (${keys.map((_, i) => `$${i + 1}`).join(", ")})
+         on conflict (id) do nothing returning *`,
+        values,
+      );
+      return rows[0] ?? null;
+    }
+    case "pantry.update": {
+      const cols = pantryCols(m.patch ?? {});
+      if (!Object.keys(cols).length) return null;
+      cols.updated_by = text(m.actor, "Name", 40);
+      const params: unknown[] = [];
+      const set = assignments(cols, params);
+      params.push(uuid(m.id), spaceId);
+      const { rows } = await pool.query(
+        `update pantry_items set ${set.join(", ")} where id = $${params.length - 1} and space_id = $${params.length} returning *`,
+        params,
+      );
+      return rows[0] ?? bad("That item is gone");
+    }
+    case "pantry.delete": {
+      await pool.query("delete from pantry_items where id = $1 and space_id = $2", [uuid(m.id), spaceId]);
       return null;
     }
     default:

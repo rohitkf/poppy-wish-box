@@ -5,6 +5,7 @@ import { Icon, ListGlyph } from "@/components/icons";
 import { Avatar, Logo, tileStyle } from "@/components/ui/bits";
 import { useSpace } from "@/components/app/SpaceProvider";
 import { ListEditor } from "@/components/app/ListEditor";
+import { usePantry } from "@/components/app/Pantry";
 import { useNav } from "@/lib/client/nav";
 import { cn } from "@/lib/client/util";
 
@@ -12,6 +13,7 @@ export function Sidebar() {
   const { data, me, here } = useSpace();
   const { route, go } = useNav();
   const [creating, setCreating] = useState(false);
+  const { items: pantry, counts } = usePantry();
   const lists = data.lists.filter((l) => !l.archived_at).sort((a, b) => a.position - b.position);
   const members = data.space.member_names;
 
@@ -28,6 +30,33 @@ export function Sidebar() {
       >
         <Icon.Search size={16} />
         Search
+      </button>
+      <button
+        type="button"
+        onClick={() => go({ view: "pantry" })}
+        aria-current={route.view === "pantry" ? "page" : undefined}
+        className={cn(
+          "-mx-1 flex h-10 shrink-0 items-center gap-2.5 rounded-[10px] px-2.5 text-left text-[15px]",
+          route.view === "pantry" ? "bg-surface font-semibold" : "hover:bg-surface/60",
+        )}
+      >
+        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-teal-soft text-teal-ink">
+          <Icon.Jar size={15} />
+        </span>
+        <span className="flex-1 truncate">Pantry</span>
+        {counts.expired + counts.soon ? (
+          <span
+            className={cn(
+              "min-w-5 rounded-full px-1.5 text-center text-[12px] leading-5 font-semibold tabular-nums",
+              counts.expired ? "bg-danger text-white" : "bg-warn-soft text-warn",
+            )}
+            title={`${counts.expired} expired, ${counts.soon} to use soon`}
+          >
+            {counts.expired + counts.soon}
+          </span>
+        ) : (
+          <span className="text-[13px] font-normal text-ink-3">{pantry.length}</span>
+        )}
       </button>
       <nav className="-mx-1 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-1" aria-label="Lists">
         {lists.map((l) => {

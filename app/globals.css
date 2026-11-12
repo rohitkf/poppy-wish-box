@@ -26,6 +26,10 @@
   --online: #2f8f5b;
   --danger: #a33a1e;
   --danger-line: #e3c3b6;
+  --danger-soft: #f6dcd3;
+  --warn: #8a5a00;
+  --warn-soft: #f8e6c4;
+  --warn-line: #e6c98f;
   --bar: #1f1b16;
   --bar-ink: #ffffff;
   --bar-chip: #3a332b;
@@ -71,6 +75,10 @@
   --online: #4cc387;
   --danger: #f08a6c;
   --danger-line: #6b3527;
+  --danger-soft: #3b1e16;
+  --warn: #f0c46a;
+  --warn-soft: #33270f;
+  --warn-line: #5c4718;
   --bar: #0e0c09;
   --bar-chip: #2c271f;
   --pill-idea-bg: #2c271f;
@@ -89,6 +97,10 @@
 
 @theme inline {
   --color-bg: var(--bg);
+  --color-danger-soft: var(--danger-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-line: var(--warn-line);
   --color-surface: var(--surface);
   --color-sunken: var(--sunken);
   --color-sidebar: var(--sidebar);
