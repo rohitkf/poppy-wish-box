@@ -9,6 +9,8 @@ import type {
   FieldDefPatch,
   FieldType,
   Item,
+  PantryItem,
+  PantryPatch,
   ItemPatch,
   ItemPhoto,
   List,
@@ -211,8 +213,9 @@ export const localPreviews = new Map<string, string>();
 
 // ─── Cache helpers ──────────────────────────────────────────────────────────
 
-type Collection = "lists" | "fields" | "items" | "photos";
+type Collection = "lists" | "fields" | "items" | "photos" | "pantry";
 const TABLE_TO_KEY: Record<string, Collection | "space" | "presence"> = {
+  pantry_items: "pantry",
   lists: "lists",
   field_defs: "fields",
   items: "items",
@@ -279,7 +282,7 @@ export function applyChange(qc: QueryClient, ev: ChangeEvent, me: string | null,
       return { ...d, presence: [...others, ev.row as unknown as SpaceData["presence"][number]] };
     }
     if (ev.op === "DELETE") {
-      const next = { ...d, [key]: (d[key] as { id: string }[]).filter((r) => r.id !== ev.id) };
+      const next = { ...d, [key]: ((d[key] ?? []) as { id: string }[]).filter((r) => r.id !== ev.id) };
       if (key === "items") next.photos = d.photos.filter((p) => p.item_id !== ev.id);
       if (key === "lists") {
         next.items = d.items.filter((i) => i.list_id !== ev.id);
@@ -297,7 +300,9 @@ export function applyChange(qc: QueryClient, ev: ChangeEvent, me: string | null,
       if (who && who !== me) markHighlight(item.id, ev.op === "INSERT" ? "added" : "edited");
       return { ...d, items: upsert(d.items, item, preserveItem) };
     }
-    return { ...d, [key]: upsert(d[key] as { id: string }[], row as { id: string }) };
+    // Removed locally and waiting for undo? Ignore echoes.
+    if (pendingDeletes.has(row.id as string)) return d;
+    return { ...d, [key]: upsert((d[key] ?? []) as { id: string }[], row as { id: string }) };
   });
 }
 
@@ -342,7 +347,7 @@ export function useActions(me: string | null) {
       set((d) => ({
         ...d,
         [collection]: upsert(
-          d[collection] as { id: string }[],
+          (d[collection] ?? []) as { id: string }[],
           row as { id: string },
           collection === "items" ? (preserveItem as never) : undefined,
         ),
@@ -595,6 +600,71 @@ export function useActions(me: string | null) {
       deletePhoto(id: string) {
         set((s) => ({ ...s, photos: s.photos.filter((p) => p.id !== id) }));
         send({ op: "photo.delete", id }).catch(fail);
+      },
+
+      addPantry(input: Pick<PantryItem, "name" | "location"> & PantryPatch) {
+        const id = uid();
+        const now = new Date().toISOString();
+        const item: PantryItem = {
+          id,
+          space_id: get()?.space.id ?? "",
+          category: null,
+          quantity: null,
+          unit: null,
+          expires_on: null,
+          opened_on: null,
+          added_by: me,
+          updated_by: me,
+          created_at: now,
+          updated_at: now,
+          ...input,
+          name: input.name.trim(),
+        };
+        set((s) => ({ ...s, pantry: [item, ...(s.pantry ?? [])] }));
+        const { name, location, category, quantity, unit, expires_on, opened_on } = item;
+        send({ op: "pantry.create", item: { id, name, location, category, quantity, unit, expires_on, opened_on }, actor: me })
+          .then((row) => mergeRow("pantry", row))
+          .catch(fail);
+        return id;
+      },
+
+      updatePantry(id: string, patch: PantryPatch) {
+        const now = new Date().toISOString();
+        set((s) => ({
+          ...s,
+          pantry: (s.pantry ?? []).map((p) => (p.id === id ? { ...p, ...patch, updated_at: now, updated_by: me ?? p.updated_by } : p)),
+        }));
+        send({ op: "pantry.update", id, patch, actor: me })
+          .then((row) => mergeRow("pantry", row))
+          .catch(fail);
+      },
+
+      /** Removes an item (used up or thrown away), with a few seconds to undo. */
+      removePantry(id: string, verb = "Removed") {
+        const item = get()?.pantry?.find((p) => p.id === id);
+        if (!item) return;
+        set((s) => ({ ...s, pantry: (s.pantry ?? []).filter((p) => p.id !== id) }));
+        const run = () => {
+          pendingDeletes.delete(id);
+          send({ op: "pantry.delete", id }).catch(fail);
+        };
+        pendingDeletes.set(id, { timer: setTimeout(run, 5500), run });
+        showToast(
+          {
+            message: `${verb} “${item.name}”`,
+            action: {
+              label: "Undo",
+              onClick: () => {
+                const p = pendingDeletes.get(id);
+                if (!p) return;
+                clearTimeout(p.timer);
+                pendingDeletes.delete(id);
+                set((s) => ({ ...s, pantry: [item, ...(s.pantry ?? [])] }));
+              },
+            },
+          },
+          5000,
+        );
       },
     };
   }, [me, set, get, fail, mergeRow]);

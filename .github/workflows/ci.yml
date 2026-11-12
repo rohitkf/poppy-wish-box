@@ -1,10 +1,12 @@
-# Checks every push to develop and every release PR into main.
+# Checks every push to develop (fast job) and every release PR into main (fast job + Docker image).
 # Deploys stay with Vercel's Git integration (develop → previews, main → production).
 name: CI
 
 on:
   push:
     branches: [develop]
+    # Docs-only pushes change nothing CI can check.
+    paths-ignore: ["**.md", "docs/**", ".env.example", "LICENSE"]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -52,6 +54,12 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      - name: Restore the Next.js build cache
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: next-${{ hashFiles('package-lock.json') }}-${{ hashFiles('app/**', 'components/**', 'lib/**', 'public/**', '*.ts', '*.mjs') }}
+          restore-keys: next-${{ hashFiles('package-lock.json') }}-
       - run: npm run build
       - name: Apply the schema twice (it must be idempotent)
         run: npm run setup && npm run setup
@@ -63,10 +71,12 @@ jobs:
       - run: npm test
       - name: Server log
         if: failure()
-        run: cat server.log
+        run: cat server.log 2>/dev/null || echo "The server never started (see the failed step above)."
 
   docker:
     name: Docker image
+    # The slowest job (about 4 minutes): run it as the release gate, not on every develop push.
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

@@ -216,6 +216,58 @@ test("live sync reports the build and streams changes", async () => {
   }
 });
 
+test("pantry items can be added, changed, used up and removed", async () => {
+  const cookie = await unlock();
+  const before = await (await request("/api/data", { cookie })).json();
+  assert.deepEqual(before.space.pantry_locations, ["Fridge", "Freezer", "Pantry"]);
+  assert.equal(before.space.expiry_warn_days, 3);
+  assert.ok(Array.isArray(before.pantry));
+
+  const id = randomUUID();
+  const created = await mutate(cookie, {
+    op: "pantry.create",
+    item: { id, name: "Greek yoghurt", location: "Fridge", category: "Dairy", quantity: 2, unit: "pots", expires_on: "2030-01-05" },
+    actor: "CI",
+  });
+  assert.equal(created.name, "Greek yoghurt");
+  assert.equal(created.quantity, 2);
+  assert.equal(created.added_by, "CI");
+  const used = await mutate(cookie, { op: "pantry.update", id, patch: { quantity: 1, opened_on: "2030-01-01" }, actor: "CI" });
+  assert.equal(used.quantity, 1);
+  assert.equal(used.opened_on.slice(0, 10), "2030-01-01");
+
+  const bad = await request("/api/mutate", { method: "POST", cookie, body: { op: "pantry.update", id, patch: { expires_on: "next week" } } });
+  assert.equal(bad.status, 400);
+  const noName = await request("/api/mutate", { method: "POST", cookie, body: { op: "pantry.create", item: { id: randomUUID(), name: " " } } });
+  assert.equal(noName.status, 400);
+
+  await mutate(cookie, { op: "space.update", patch: { pantry_locations: ["Fridge", "Garage fridge"], expiry_warn_days: 5 } });
+  const after = await (await request("/api/data", { cookie })).json();
+  assert.deepEqual(after.space.pantry_locations, ["Fridge", "Garage fridge"]);
+  assert.equal(after.space.expiry_warn_days, 5);
+  assert.ok(after.pantry.some((p) => p.id === id));
+
+  await mutate(cookie, { op: "pantry.delete", id });
+  const gone = await (await request("/api/data", { cookie })).json();
+  assert.ok(!gone.pantry.some((p) => p.id === id));
+});
+
+test("expiry reminders: subscribing needs the cookie and a real push service, and the daily run is safe", async () => {
+  assert.equal((await request("/api/push")).status, 401);
+  const cookie = await unlock();
+  const key = await (await request("/api/push", { cookie })).json();
+  assert.match(key.publicKey, /^[A-Za-z0-9_-]{80,}$/);
+  const evil = await request("/api/push", {
+    method: "POST",
+    cookie,
+    body: { action: "subscribe", subscription: { endpoint: "https://attacker.example/collect", keys: { p256dh: "x", auth: "y" } } },
+  });
+  assert.equal(evil.status, 400, "only browser push services are accepted");
+  const cron = await request("/api/cron/expiry");
+  assert.equal(cron.status, 200);
+  assert.deepEqual(Object.keys(await cron.json()).sort(), ["ok", "sent"]);
+});
+
 // Keep this last: it pauses unlocking for everyone.
 test("a burst of wrong codes from many networks can't get past the limit for everyone", async () => {
   const cookie = await unlock();

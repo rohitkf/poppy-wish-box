@@ -13,6 +13,7 @@ import { Home } from "@/components/app/Home";
 import { ListView } from "@/components/app/ListView";
 import { ItemDetail } from "@/components/app/ItemDetail";
 import { Settings } from "@/components/app/Settings";
+import { Pantry } from "@/components/app/Pantry";
 import { NamePicker } from "@/components/app/NamePicker";
 import { UpdatePrompt } from "@/components/app/UpdatePrompt";
 import { makeQueryClient, useOutboxSize } from "@/lib/client/store";
@@ -136,6 +137,7 @@ function Shell() {
   const closeItem = () => go({ list: route.list });
   let main: React.ReactNode;
   if (route.view === "settings") main = <Settings />;
+  else if (route.view === "pantry") main = <Pantry />;
   else if (list) main = <ListView key={list.id} list={list} />;
   else main = <Home />;
 

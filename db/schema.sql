@@ -96,11 +96,58 @@ create table if not exists presence (
   primary key (space_id, device_id)
 );
 
+-- Pantry: food at home, where it is and when it expires.
+alter table spaces add column if not exists pantry_locations text[] not null default array['Fridge', 'Freezer', 'Pantry'];
+alter table spaces add column if not exists expiry_warn_days integer not null default 3;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'spaces_expiry_warn_days_check') then
+    alter table spaces add constraint spaces_expiry_warn_days_check check (expiry_warn_days between 0 and 60);
+  end if;
+end;
+$$;
+
+create table if not exists pantry_items (
+  id uuid primary key default gen_random_uuid(),
+  space_id uuid not null references spaces (id) on delete cascade,
+  name text not null check (char_length(name) between 1 and 120),
+  location text not null default 'Fridge' check (char_length(location) between 1 and 40),
+  category text check (char_length(category) <= 40),
+  quantity numeric(10, 2) check (quantity >= 0),
+  unit text check (char_length(unit) <= 20),
+  expires_on date,
+  opened_on date,
+  added_by text,
+  updated_by text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Phones that asked for expiry reminders (Web Push). Never broadcast: no notify trigger.
+create table if not exists push_subscriptions (
+  endpoint text primary key check (char_length(endpoint) <= 1000),
+  space_id uuid not null references spaces (id) on delete cascade,
+  p256dh text not null check (char_length(p256dh) <= 200),
+  auth text not null check (char_length(auth) <= 100),
+  device_id text check (char_length(device_id) <= 64),
+  name text check (char_length(name) <= 40),
+  last_notified_on date,
+  created_at timestamptz not null default now()
+);
+
+-- Server-generated keys (the Web Push VAPID key pair), so push needs no setup.
+create table if not exists app_keys (
+  name text primary key,
+  value jsonb not null,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists lists_space_idx on lists (space_id, position);
 create index if not exists field_defs_list_idx on field_defs (list_id, position);
 create index if not exists items_space_idx on items (space_id);
 create index if not exists items_list_idx on items (list_id, status);
 create index if not exists item_photos_item_idx on item_photos (item_id, position);
+create index if not exists pantry_items_space_idx on pantry_items (space_id, expires_on);
 
 create or replace function touch_updated_at() returns trigger language plpgsql as $$
 begin
@@ -113,6 +160,8 @@ drop trigger if exists lists_touch on lists;
 create trigger lists_touch before update on lists for each row execute function touch_updated_at();
 drop trigger if exists items_touch on items;
 create trigger items_touch before update on items for each row execute function touch_updated_at();
+drop trigger if exists pantry_items_touch on pantry_items;
+create trigger pantry_items_touch before update on pantry_items for each row execute function touch_updated_at();
 
 -- Broadcast every change. Rows larger than NOTIFY's 8 kB limit are sent
 -- without the row body; clients then refetch.
@@ -145,7 +194,7 @@ do $$
 declare
   t text;
 begin
-  foreach t in array array['spaces', 'lists', 'field_defs', 'items', 'item_photos'] loop
+  foreach t in array array['spaces', 'lists', 'field_defs', 'items', 'item_photos', 'pantry_items'] loop
     execute format('drop trigger if exists %1$s_notify on %1$I', t);
     execute format('create trigger %1$s_notify after insert or update or delete on %1$I
                     for each row execute function notify_change()', t);

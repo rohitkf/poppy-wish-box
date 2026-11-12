@@ -22,6 +22,20 @@ function Svg({ size = 22, children, strokeWidth = 1.8, ...rest }: P) {
 }
 
 export const Icon = {
+  Alert: (p: P) => (
+    <Svg {...p}>
+      <path d="M12 3.5 2.5 20h19z" />
+      <path d="M12 10v4.5" />
+      <path d="M12 17.5h.01" />
+    </Svg>
+  ),
+  Jar: (p: P) => (
+    <Svg {...p}>
+      <path d="M8 3h8v3H8z" />
+      <path d="M7 6h10a1 1 0 0 1 1 1v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7a1 1 0 0 1 1-1z" />
+      <path d="M6 11h12" />
+    </Svg>
+  ),
   Pin: (p: P) => (
     <Svg {...p}>
       <path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" />

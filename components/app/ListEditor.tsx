@@ -10,6 +10,18 @@ import type { List, ListColor } from "@/lib/types";
 
 const EMOJI = ["✈️", "🍜", "🎁", "🏡", "🎬", "📚", "🌿", "☕", "🎟️", "🧺"];
 
+const isEmoji = (g: string) => /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(g);
+
+/** The last whole emoji typed or pasted (a ❤️, 👍🏽, 🇮🇳 or 👨‍👩‍👧 is one, even though it's several code points). */
+function lastEmoji(text: string): string | null {
+  const graphemes =
+    typeof Intl !== "undefined" && "Segmenter" in Intl
+      ? [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)].map((x) => x.segment)
+      : [...text];
+  for (let i = graphemes.length - 1; i >= 0; i--) if (isEmoji(graphemes[i])) return graphemes[i];
+  return null;
+}
+
 /** Create a list (no `list`) or rename/restyle one. */
 export function ListEditor({
   open,
@@ -33,6 +45,9 @@ function ListForm({ list, onCreated, onDone }: { list?: List; onCreated?: (id: s
   const { data, actions } = useSpace();
   const [name, setName] = useState(list?.name ?? "");
   const [emoji, setEmoji] = useState(list?.emoji ?? "icon:star");
+  // What the "type any emoji" box shows, and the icon to fall back to when it's cleared.
+  const [custom, setCustom] = useState(() => (list?.emoji && !list.emoji.startsWith("icon:") && !EMOJI.includes(list.emoji) ? list.emoji : ""));
+  const [picked, setPicked] = useState(() => (list?.emoji && (list.emoji.startsWith("icon:") || EMOJI.includes(list.emoji)) ? list.emoji : "icon:star"));
   const [color, setColor] = useState<ListColor>(
     () => list?.color ?? LIST_COLORS[data.lists.length % LIST_COLORS.length],
   );
@@ -77,7 +92,11 @@ function ListForm({ list, onCreated, onDone }: { list?: List; onCreated?: (id: s
                 type="button"
                 aria-label={k.startsWith("icon:") ? k.slice(5) : k}
                 aria-pressed={emoji === k}
-                onClick={() => setEmoji(k)}
+                onClick={() => {
+                  setEmoji(k);
+                  setPicked(k);
+                  setCustom("");
+                }}
                 className={cn(
                   "flex h-12 items-center justify-center rounded-xl border",
                   emoji === k ? "border-ink bg-surface" : "border-transparent bg-sunken text-ink-2",
@@ -90,14 +109,37 @@ function ListForm({ list, onCreated, onDone }: { list?: List; onCreated?: (id: s
           <label className="mt-1 flex items-center gap-2 text-[14px] text-ink-2">
             Or type any emoji
             <input
-              value={emoji.startsWith("icon:") ? "" : emoji}
+              value={custom}
               onChange={(e) => {
-                const v = [...e.target.value.trim()].slice(-2).join("");
-                if (v) setEmoji(v);
+                const text = e.target.value;
+                if (!text.trim()) {
+                  // Cleared (Backspace): go back to the icon picked above.
+                  setCustom("");
+                  setEmoji(picked);
+                  return;
+                }
+                const g = lastEmoji(text);
+                if (!g) return; // letters and numbers aren't icons
+                setCustom(g);
+                setEmoji(g);
               }}
-              className="h-10 w-16 rounded-lg border border-line-2 bg-surface text-center text-[18px] outline-none"
+              inputMode="text"
+              autoComplete="off"
+              className="h-10 w-16 rounded-lg border border-line-2 bg-surface text-center text-[18px] outline-none focus:border-ink"
               aria-label="Custom emoji"
             />
+            {custom ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setCustom("");
+                  setEmoji(picked);
+                }}
+                className="text-[13px] font-semibold text-clay-ink"
+              >
+                Clear
+              </button>
+            ) : null}
           </label>
         </fieldset>
 

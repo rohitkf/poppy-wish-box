@@ -8,7 +8,32 @@ export interface Space {
   member_names: string[];
   priority_labels: string[];
   default_currency: string;
+  /** Where pantry items can live: the presets plus any the couple added. */
+  pantry_locations: string[];
+  /** An item is "expiring soon" this many days (or fewer) before its date. */
+  expiry_warn_days: number;
 }
+
+export interface PantryItem {
+  id: string;
+  space_id: string;
+  name: string;
+  location: string;
+  category: string | null;
+  quantity: number | null;
+  unit: string | null;
+  /** YYYY-MM-DD */
+  expires_on: string | null;
+  /** YYYY-MM-DD */
+  opened_on: string | null;
+  added_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const PANTRY_FIELDS = ["name", "location", "category", "quantity", "unit", "expires_on", "opened_on"] as const;
+export type PantryPatch = Partial<Pick<PantryItem, (typeof PANTRY_FIELDS)[number]>>;
 
 export interface List {
   id: string;
@@ -82,6 +107,7 @@ export interface SpaceData {
   items: Item[];
   photos: ItemPhoto[];
   presence: Presence[];
+  pantry: PantryItem[];
 }
 
 /** Editable item columns (besides custom, which merges per key). */
@@ -109,7 +135,9 @@ export type ListPatch = Partial<Pick<List, (typeof LIST_FIELDS)[number]>>;
 export const FIELD_DEF_FIELDS = ["label", "type", "options", "position"] as const;
 export type FieldDefPatch = Partial<Pick<FieldDef, (typeof FIELD_DEF_FIELDS)[number]>>;
 
-export type SpacePatch = Partial<Pick<Space, "name" | "member_names" | "priority_labels" | "default_currency">>;
+export type SpacePatch = Partial<
+  Pick<Space, "name" | "member_names" | "priority_labels" | "default_currency" | "pantry_locations" | "expiry_warn_days">
+>;
 
 /** Mutations the client can send to /api/mutate. Ids are client-generated. */
 export type Mutation =
@@ -124,11 +152,14 @@ export type Mutation =
   | { op: "field.update"; id: string; patch: FieldDefPatch }
   | { op: "field.delete"; id: string }
   | { op: "space.update"; patch: SpacePatch }
-  | { op: "photo.delete"; id: string };
+  | { op: "photo.delete"; id: string }
+  | { op: "pantry.create"; item: Pick<PantryItem, "id" | "name"> & PantryPatch; actor: string | null }
+  | { op: "pantry.update"; id: string; patch: PantryPatch; actor: string | null }
+  | { op: "pantry.delete"; id: string };
 
 /** Change broadcast from the server over SSE. */
 export interface ChangeEvent {
-  table: "spaces" | "lists" | "field_defs" | "items" | "item_photos" | "presence";
+  table: "spaces" | "lists" | "field_defs" | "items" | "item_photos" | "presence" | "pantry_items";
   op: "INSERT" | "UPDATE" | "DELETE";
   id: string;
   row: Record<string, unknown> | null;
