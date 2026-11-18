@@ -2,7 +2,7 @@
 
 import { addDays, daysBetween, endOfMonth, formatDate, layoutRow, startOfMonth, startOfWeek } from "@/lib/calendar";
 import { cn } from "@/lib/client/util";
-import { EventCard, TONE_BG, TONE_TEXT, ToneKey, tint, type CalItem, type Tone } from "@/components/app/calendar/shared";
+import { EventCard, TONE_BG, TONE_TEXT, ToneBadge, ToneKey, tint, type CalItem, type Tone } from "@/components/app/calendar/shared";
 
 export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -130,7 +130,10 @@ export function MonthView({
 
       <section aria-label={formatDate(selected, "long")} className="flex flex-col gap-2 px-3 lg:px-0">
         <div className="flex items-baseline justify-between gap-3 px-2">
-          <h2 className="font-display text-[19px] font-semibold">{formatDate(selected, selected.slice(0, 4) === today.slice(0, 4) ? "full" : "fullYear")}</h2>
+          <h2 className={cn("flex items-center gap-2 font-display text-[19px] font-semibold", toneOf(selected) && TONE_TEXT[toneOf(selected)!])}>
+            {formatDate(selected, selected.slice(0, 4) === today.slice(0, 4) ? "full" : "fullYear")}
+            <ToneBadge tone={toneOf(selected)} />
+          </h2>
           <button type="button" onClick={() => onOpenDay(selected)} className="text-[13px] font-semibold text-clay-ink">
             Open day
           </button>

@@ -221,7 +221,7 @@ function DiaryDays({ days, today, toneOf, onOpen }: { days: Day[]; today: string
                 <span className="font-display text-[24px] leading-none font-semibold tabular-nums">{Number(day.slice(8))}</span>
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <span className={cn("text-[12px] font-medium", isToday ? "text-clay-ink" : "text-ink-3")}>
+                <span className={cn("text-[12px] font-medium", isToday ? "text-clay-ink" : tone ? TONE_TEXT[tone] : "text-ink-3")}>
                   {isToday ? "Today" : `${formatDate(day, "full")} · ${relativeDay(day, today)}`}
                 </span>
                 {items.map((it) => (

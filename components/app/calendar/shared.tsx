@@ -85,6 +85,16 @@ function holidayDates(year: number, official: Official | undefined) {
   return set;
 }
 
+/** "Bank holiday" or "Weekend", beside a day's heading. */
+export function ToneBadge({ tone }: { tone: Tone }) {
+  if (!tone) return null;
+  return (
+    <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] leading-[16px] font-semibold tracking-[0.3px] uppercase", TONE_BG[tone], TONE_TEXT[tone])}>
+      {tone === "holiday" ? "Bank holiday" : "Weekend"}
+    </span>
+  );
+}
+
 /** The small key under a grid: which colour is a bank holiday and which a weekend. */
 export function ToneKey({ holidays, className }: { holidays: boolean; className?: string }) {
   return (

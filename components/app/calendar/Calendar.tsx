@@ -8,7 +8,7 @@ import { AppTabs } from "@/components/app/AppTabs";
 import { useNav } from "@/lib/client/nav";
 import { addDays, addMonths, EVENT_KINDS, formatDate, startOfWeek } from "@/lib/calendar";
 import { cn } from "@/lib/client/util";
-import { HOLIDAY_COLOR, openHoliday, usePref, useCalendar, type CalItem } from "@/components/app/calendar/shared";
+import { HOLIDAY_COLOR, TONE_TEXT, openHoliday, usePref, useCalendar, type CalItem } from "@/components/app/calendar/shared";
 import { EventDetails } from "@/components/app/calendar/EventDetails";
 import { Upcoming } from "@/components/app/calendar/Upcoming";
 import { MonthView } from "@/components/app/calendar/MonthView";
@@ -144,8 +144,14 @@ export function Calendar() {
             <button type="button" onClick={() => step(1)} aria-label="Next" className="flex h-10 w-10 items-center justify-center rounded-xl border border-line-2 hover:bg-sunken">
               <Icon.ChevronRight size={18} />
             </button>
-            <h2 className="min-w-0 flex-1 truncate font-display text-[20px] font-semibold" aria-live="polite">
-              {title}
+            <h2
+              className={cn(
+                "flex min-w-0 flex-1 items-center gap-2 truncate font-display text-[20px] font-semibold",
+                mode === "day" && toneOf(at) && TONE_TEXT[toneOf(at)!],
+              )}
+              aria-live="polite"
+            >
+              <span className="truncate">{title}</span>
             </h2>
             {!onToday ? (
               <button
