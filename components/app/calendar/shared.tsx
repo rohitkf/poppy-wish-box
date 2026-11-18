@@ -17,6 +17,7 @@ import {
   kindOf,
   occurrences,
   todayLocal,
+  weekday,
   whenLabel,
   type Occurrence,
 } from "@/lib/calendar";
@@ -65,7 +66,52 @@ export interface CalItem {
   occ?: Occurrence;
 }
 
-export const HOLIDAY_COLOR = "var(--teal-text)";
+export const HOLIDAY_COLOR = "var(--holiday)";
+
+/** What kind of day it is, for colouring the date itself: a bank holiday, a weekend, or neither. */
+export type Tone = "holiday" | "weekend" | null;
+export const TONE_TEXT: Record<"holiday" | "weekend", string> = { holiday: "font-semibold text-holiday", weekend: "text-weekend" };
+export const TONE_BG: Record<"holiday" | "weekend", string> = { holiday: "bg-holiday-soft", weekend: "bg-weekend-soft" };
+
+// Bank holiday dates per year, worked out once (official list or rules) and reused by every view.
+const holidayCache = new Map<string, Set<string>>();
+function holidayDates(year: number, official: Official | undefined) {
+  const key = `${year}:${official?.years.join(",") ?? ""}`;
+  let set = holidayCache.get(key);
+  if (!set) {
+    set = new Set(holidaysFor([year], official).map((h) => h.date));
+    holidayCache.set(key, set);
+  }
+  return set;
+}
+
+/** "Bank holiday" or "Weekend", beside a day's heading. */
+export function ToneBadge({ tone }: { tone: Tone }) {
+  if (!tone) return null;
+  return (
+    <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] leading-[16px] font-semibold tracking-[0.3px] uppercase", TONE_BG[tone], TONE_TEXT[tone])}>
+      {tone === "holiday" ? "Bank holiday" : "Weekend"}
+    </span>
+  );
+}
+
+/** The small key under a grid: which colour is a bank holiday and which a weekend. */
+export function ToneKey({ holidays, className }: { holidays: boolean; className?: string }) {
+  return (
+    <div className={cn("flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-ink-3", className)}>
+      {holidays ? (
+        <span className="flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-[4px] border border-holiday/40 bg-holiday-soft" aria-hidden />
+          <span className="text-holiday">Bank holiday</span>
+        </span>
+      ) : null}
+      <span className="flex items-center gap-1.5">
+        <span className="h-3 w-3 rounded-[4px] border border-weekend/30 bg-weekend-soft" aria-hidden />
+        <span className="text-weekend">Weekend</span>
+      </span>
+    </div>
+  );
+}
 
 function fromOcc(o: Occurrence): CalItem {
   return {
@@ -136,7 +182,16 @@ export function useCalendar(who: string = "all", show: string | null = null) {
     [shown, holidays, official],
   );
 
-  return { today, events, itemsIn, members: data.space.member_names ?? [] };
+  // Days are coloured whenever bank holidays are switched on, whatever the type filter shows.
+  const toneOf = useCallback(
+    (day: string): Tone => {
+      if (showHolidays && holidayDates(Number(day.slice(0, 4)), official).has(day)) return "holiday";
+      return weekday(day) >= 5 ? "weekend" : null;
+    },
+    [showHolidays, official],
+  );
+
+  return { today, events, itemsIn, toneOf, showHolidays, members: data.space.member_names ?? [] };
 }
 
 // ─── Pieces ─────────────────────────────────────────────────────────────────
@@ -200,7 +255,7 @@ export function EventCard({ item, today, onOpen, showDay }: { item: CalItem; tod
       <span className="w-1.5 shrink-0 rounded-l-[14px]" style={{ background: item.color }} aria-hidden />
       <span className="flex min-w-0 flex-1 flex-col gap-1 py-2.5 pr-1">
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          {item.holiday ? <Icon.Flag size={14} className="shrink-0 text-teal-text" /> : null}
+          {item.holiday ? <Icon.Flag size={14} className="shrink-0 text-holiday" /> : null}
           <span className="min-w-0 text-[16px] font-semibold break-words">{item.title}</span>
           <Chip color={item.color}>{item.holiday ? "Bank holiday" : kindOf(ev!.kind).label}</Chip>
           {ev && ev.repeat !== "none" ? <Chip>{REPEAT_CHIP[ev.repeat]}</Chip> : null}

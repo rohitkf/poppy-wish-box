@@ -30,6 +30,10 @@
   --warn: #8a5a00;
   --warn-soft: #f8e6c4;
   --warn-line: #e6c98f;
+  --holiday: #b42343;
+  --holiday-soft: #fae3e8;
+  --weekend: #3a5f8f;
+  --weekend-soft: #eaf0f7;
   --bar: #1f1b16;
   --bar-ink: #ffffff;
   --bar-chip: #3a332b;
@@ -79,6 +83,10 @@
   --warn: #f0c46a;
   --warn-soft: #33270f;
   --warn-line: #5c4718;
+  --holiday: #f08aa0;
+  --holiday-soft: #3a1c24;
+  --weekend: #9db8e0;
+  --weekend-soft: #1b2230;
   --bar: #0e0c09;
   --bar-chip: #2c271f;
   --pill-idea-bg: #2c271f;
@@ -101,6 +109,10 @@
   --color-warn: var(--warn);
   --color-warn-soft: var(--warn-soft);
   --color-warn-line: var(--warn-line);
+  --color-holiday: var(--holiday);
+  --color-holiday-soft: var(--holiday-soft);
+  --color-weekend: var(--weekend);
+  --color-weekend-soft: var(--weekend-soft);
   --color-surface: var(--surface);
   --color-sunken: var(--sunken);
   --color-sidebar: var(--sidebar);

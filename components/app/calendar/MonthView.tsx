@@ -2,7 +2,7 @@
 
 import { addDays, daysBetween, endOfMonth, formatDate, layoutRow, startOfMonth, startOfWeek } from "@/lib/calendar";
 import { cn } from "@/lib/client/util";
-import { EventCard, tint, type CalItem } from "@/components/app/calendar/shared";
+import { EventCard, TONE_BG, TONE_TEXT, ToneBadge, ToneKey, tint, type CalItem, type Tone } from "@/components/app/calendar/shared";
 
 export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -15,6 +15,8 @@ export function MonthView({
   today,
   selected,
   itemsIn,
+  toneOf,
+  holidays,
   onSelect,
   onOpen,
   onOpenDay,
@@ -24,6 +26,8 @@ export function MonthView({
   today: string;
   selected: string;
   itemsIn: (from: string, to: string) => CalItem[];
+  toneOf: (day: string) => Tone;
+  holidays: boolean;
   onSelect: (day: string) => void;
   onOpen: (i: CalItem) => void;
   onOpenDay: (day: string) => void;
@@ -43,8 +47,12 @@ export function MonthView({
     <div className="flex flex-col gap-4">
       <div className="mx-3 overflow-hidden rounded-2xl border border-line bg-surface lg:mx-0" role="grid" aria-label={formatDate(first, "monthYear")}>
         <div className="grid grid-cols-7 border-b border-line" role="row">
-          {WEEKDAYS.map((d) => (
-            <div key={d} role="columnheader" className="py-2 text-center text-[11px] font-semibold tracking-[0.6px] text-ink-3 uppercase">
+          {WEEKDAYS.map((d, i) => (
+            <div
+              key={d}
+              role="columnheader"
+              className={cn("py-2 text-center text-[11px] font-semibold tracking-[0.6px] uppercase", i >= 5 ? "bg-weekend-soft text-weekend" : "text-ink-3")}
+            >
               {d.slice(0, 1)}
               <span className="max-sm:hidden">{d.slice(1)}</span>
             </div>
@@ -61,6 +69,7 @@ export function MonthView({
                 const day = addDays(rowStart, c);
                 const out = day.slice(0, 7) !== month;
                 const isSel = day === selected;
+                const tone = toneOf(day);
                 return (
                   <button
                     key={day}
@@ -71,14 +80,15 @@ export function MonthView({
                     onClick={() => (isSel ? onOpenDay(day) : onSelect(day))}
                     className={cn(
                       "relative flex flex-col items-center border-r border-line-soft pt-1 last:border-r-0",
-                      out && "bg-sunken/40",
+                      tone ? TONE_BG[tone] : out && "bg-sunken/40",
+                      out && "opacity-60",
                       isSel && "bg-highlight",
                     )}
                   >
                     <span
                       className={cn(
                         "flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-[13px] tabular-nums",
-                        day === today ? "bg-clay font-semibold text-on-clay" : out ? "text-ink-3" : "text-ink",
+                        day === today ? "bg-clay font-semibold text-on-clay" : tone ? TONE_TEXT[tone] : out ? "text-ink-3" : "text-ink",
                       )}
                     >
                       {Number(day.slice(8))}
@@ -116,9 +126,14 @@ export function MonthView({
         })}
       </div>
 
+      <ToneKey holidays={holidays} className="-mt-2 px-5 lg:px-1" />
+
       <section aria-label={formatDate(selected, "long")} className="flex flex-col gap-2 px-3 lg:px-0">
         <div className="flex items-baseline justify-between gap-3 px-2">
-          <h2 className="font-display text-[19px] font-semibold">{formatDate(selected, selected.slice(0, 4) === today.slice(0, 4) ? "full" : "fullYear")}</h2>
+          <h2 className={cn("flex items-center gap-2 font-display text-[19px] font-semibold", toneOf(selected) && TONE_TEXT[toneOf(selected)!])}>
+            {formatDate(selected, selected.slice(0, 4) === today.slice(0, 4) ? "full" : "fullYear")}
+            <ToneBadge tone={toneOf(selected)} />
+          </h2>
           <button type="button" onClick={() => onOpenDay(selected)} className="text-[13px] font-semibold text-clay-ink">
             Open day
           </button>

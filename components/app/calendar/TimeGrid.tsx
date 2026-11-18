@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useNow } from "@/lib/client/clock";
 import { addDays, formatDate, layoutDay, layoutRow, segmentOn } from "@/lib/calendar";
 import { cn } from "@/lib/client/util";
-import { tint, type CalItem } from "@/components/app/calendar/shared";
+import { TONE_BG, TONE_TEXT, tint, type CalItem, type Tone } from "@/components/app/calendar/shared";
 
 const HOUR = 48; // px
 const LANE = 24;
@@ -15,6 +15,7 @@ export function TimeGrid({
   days,
   today,
   itemsIn,
+  toneOf,
   onOpen,
   onOpenDay,
   onCreate,
@@ -23,6 +24,7 @@ export function TimeGrid({
   days: number;
   today: string;
   itemsIn: (from: string, to: string) => CalItem[];
+  toneOf: (day: string) => Tone;
   onOpen: (i: CalItem) => void;
   onOpenDay: (day: string) => void;
   onCreate: (day: string, time?: string) => void;
@@ -72,14 +74,14 @@ export function TimeGrid({
               key={d}
               type="button"
               onClick={() => days > 1 && onOpenDay(d)}
-              className="flex flex-col items-center py-1.5"
+              className={cn("flex flex-col items-center py-1.5", toneOf(d) && TONE_BG[toneOf(d)!])}
               aria-label={formatDate(d, "long")}
             >
-              <span className="text-[11px] font-semibold tracking-[0.5px] text-ink-3 uppercase">{formatDate(d, "weekdayShort").slice(0, days > 1 ? 1 : 3)}</span>
+              <span className={cn("text-[11px] font-semibold tracking-[0.5px] uppercase", toneOf(d) ? TONE_TEXT[toneOf(d)!] : "text-ink-3")}>{formatDate(d, "weekdayShort").slice(0, days > 1 ? 1 : 3)}</span>
               <span
                 className={cn(
                   "flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-[15px] font-semibold tabular-nums",
-                  d === today && "bg-clay text-on-clay",
+                  d === today ? "bg-clay text-on-clay" : toneOf(d) && TONE_TEXT[toneOf(d)!],
                 )}
               >
                 {Number(d.slice(8))}
@@ -126,7 +128,7 @@ export function TimeGrid({
         {cols.map((day, ci) => (
           <div
             key={day}
-            className="relative border-l border-line-soft"
+            className={cn("relative border-l border-line-soft", toneOf(day) && TONE_BG[toneOf(day)!])}
             onClick={(e) => {
               if (e.target !== e.currentTarget) return;
               const y = e.clientY - e.currentTarget.getBoundingClientRect().top;

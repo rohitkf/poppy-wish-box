@@ -8,7 +8,7 @@ import { AppTabs } from "@/components/app/AppTabs";
 import { useNav } from "@/lib/client/nav";
 import { addDays, addMonths, EVENT_KINDS, formatDate, startOfWeek } from "@/lib/calendar";
 import { cn } from "@/lib/client/util";
-import { HOLIDAY_COLOR, openHoliday, usePref, useCalendar, useShowHolidays, type CalItem } from "@/components/app/calendar/shared";
+import { HOLIDAY_COLOR, TONE_TEXT, openHoliday, usePref, useCalendar, type CalItem } from "@/components/app/calendar/shared";
 import { EventDetails } from "@/components/app/calendar/EventDetails";
 import { Upcoming } from "@/components/app/calendar/Upcoming";
 import { MonthView } from "@/components/app/calendar/MonthView";
@@ -45,8 +45,7 @@ export function Calendar() {
   const { go } = useNav();
   const [who, setWho] = useState("all");
   const [kind, setKind] = useState<string | null>(null);
-  const { today, itemsIn, members, events } = useCalendar(who, kind);
-  const [showHolidays] = useShowHolidays();
+  const { today, itemsIn, members, events, toneOf, showHolidays } = useCalendar(who, kind);
   const [reading, setReading] = useState<{ event: CalendarEvent; occurrence: string } | null>(null);
   const [yearsPref, setYearsPref] = usePref<string>("ours:cal-years", "1");
   const years = Math.min(25, Math.max(1, Number(yearsPref) || 1));
@@ -145,8 +144,14 @@ export function Calendar() {
             <button type="button" onClick={() => step(1)} aria-label="Next" className="flex h-10 w-10 items-center justify-center rounded-xl border border-line-2 hover:bg-sunken">
               <Icon.ChevronRight size={18} />
             </button>
-            <h2 className="min-w-0 flex-1 truncate font-display text-[20px] font-semibold" aria-live="polite">
-              {title}
+            <h2
+              className={cn(
+                "flex min-w-0 flex-1 items-center gap-2 truncate font-display text-[20px] font-semibold",
+                mode === "day" && toneOf(at) && TONE_TEXT[toneOf(at)!],
+              )}
+              aria-live="polite"
+            >
+              <span className="truncate">{title}</span>
             </h2>
             {!onToday ? (
               <button
@@ -208,6 +213,8 @@ export function Calendar() {
         <Upcoming
           today={today}
           itemsIn={itemsIn}
+          toneOf={toneOf}
+          holidays={showHolidays}
           years={years}
           setYears={(n) => setYearsPref(String(n))}
           onOpen={open}
@@ -220,17 +227,19 @@ export function Calendar() {
           today={today}
           selected={sel.slice(0, 7) === at.slice(0, 7) ? sel : `${at.slice(0, 7)}-01`}
           itemsIn={itemsIn}
+          toneOf={toneOf}
+          holidays={showHolidays}
           onSelect={setSelected}
           onOpen={open}
           onOpenDay={(d) => show("day", d)}
           lanes={wide ? 4 : 3}
         />
       ) : mode === "week" ? (
-        <TimeGrid start={weekStart} days={7} today={today} itemsIn={itemsIn} onOpen={open} onOpenDay={(d) => show("day", d)} onCreate={add} />
+        <TimeGrid start={weekStart} days={7} today={today} itemsIn={itemsIn} toneOf={toneOf} onOpen={open} onOpenDay={(d) => show("day", d)} onCreate={add} />
       ) : mode === "day" ? (
-        <TimeGrid start={at} days={1} today={today} itemsIn={itemsIn} onOpen={open} onOpenDay={() => {}} onCreate={add} />
+        <TimeGrid start={at} days={1} today={today} itemsIn={itemsIn} toneOf={toneOf} onOpen={open} onOpenDay={() => {}} onCreate={add} />
       ) : (
-        <YearView year={Number(at.slice(0, 4))} today={today} itemsIn={itemsIn} onOpenDay={(d) => show("day", d)} onOpenMonth={(m) => show("month", m)} />
+        <YearView year={Number(at.slice(0, 4))} today={today} itemsIn={itemsIn} toneOf={toneOf} holidays={showHolidays} onOpenDay={(d) => show("day", d)} onOpenMonth={(m) => show("month", m)} />
       )}
 
       <button
