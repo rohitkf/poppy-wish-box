@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { addDays, addMonths, daysBetween, endOfMonth, formatDate, KEEP_DAYS_AFTER, relativeDay, startOfMonth, startOfWeek } from "@/lib/calendar";
 import { cn } from "@/lib/client/util";
-import { EventCard, type CalItem } from "@/components/app/calendar/shared";
+import { EventCard, TONE_BG, TONE_TEXT, ToneKey, type CalItem, type Tone } from "@/components/app/calendar/shared";
 import { WEEKDAYS } from "@/components/app/calendar/MonthView";
 
 const RANGES = [1, 2, 3, 5];
@@ -31,6 +31,8 @@ function byDay(items: CalItem[], clamp: string) {
 export function Upcoming({
   today,
   itemsIn,
+  toneOf,
+  holidays,
   years,
   setYears,
   onOpen,
@@ -39,6 +41,8 @@ export function Upcoming({
 }: {
   today: string;
   itemsIn: (from: string, to: string) => CalItem[];
+  toneOf: (day: string) => Tone;
+  holidays: boolean;
   years: number;
   setYears: (n: number) => void;
   onOpen: (i: CalItem) => void;
@@ -64,7 +68,7 @@ export function Upcoming({
 
   return (
     <div className="flex flex-col gap-8">
-      <MiniMonth today={today} itemsIn={itemsIn} onDay={(day, busy) => (busy ? onOpenDay(day) : onAdd(day))} />
+      <MiniMonth today={today} itemsIn={itemsIn} toneOf={toneOf} holidays={holidays} onDay={(day, busy) => (busy ? onOpenDay(day) : onAdd(day))} />
 
       <section aria-labelledby="coming-up" className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-5 lg:px-0">
@@ -125,7 +129,7 @@ export function Upcoming({
             </button>
           </div>
         ) : (
-          <DiaryDays days={shown} today={today} onOpen={onOpen} />
+          <DiaryDays days={shown} today={today} toneOf={toneOf} onOpen={onOpen} />
         )}
 
         <div className="mx-5 flex flex-col items-center gap-2 pt-2 text-center lg:mx-0">
@@ -177,7 +181,7 @@ export function Upcoming({
             <Icon.Chevron size={18} className="shrink-0 text-ink-3 transition-transform group-open:rotate-180" />
           </summary>
           <div className="flex flex-col gap-3 pb-4">
-            <DiaryDays days={pastShown} today={today} onOpen={onOpen} />
+            <DiaryDays days={pastShown} today={today} toneOf={toneOf} onOpen={onOpen} />
             {past.length > pastShown.length ? (
               <button type="button" onClick={() => setMorePast(morePast + NEXT_PAGE)} className="mx-auto h-10 rounded-[12px] border border-line-2 px-4 text-[14px] font-medium">
                 Show more
@@ -191,11 +195,12 @@ export function Upcoming({
 }
 
 /** Days, each saying its date once and then what's on it. */
-function DiaryDays({ days, today, onOpen }: { days: Day[]; today: string; onOpen: (i: CalItem) => void }) {
+function DiaryDays({ days, today, toneOf, onOpen }: { days: Day[]; today: string; toneOf: (day: string) => Tone; onOpen: (i: CalItem) => void }) {
   return (
     <ol className="flex flex-col gap-4 px-3 lg:px-0">
       {days.map(({ day, items }, i) => {
         const isToday = day === today;
+        const tone = toneOf(day);
         const month = day.slice(0, 7);
         const newMonth = i === 0 || days[i - 1].day.slice(0, 7) !== month;
         return (
@@ -209,10 +214,10 @@ function DiaryDays({ days, today, onOpen }: { days: Day[]; today: string; onOpen
               <div
                 className={cn(
                   "flex w-[52px] shrink-0 flex-col items-center self-start rounded-[14px] py-1.5",
-                  isToday ? "bg-clay text-on-clay" : day < today ? "text-ink-3" : "text-ink",
+                  isToday ? "bg-clay text-on-clay" : tone ? cn(TONE_BG[tone], TONE_TEXT[tone]) : day < today ? "text-ink-3" : "text-ink",
                 )}
               >
-                <span className={cn("text-[11px] font-semibold tracking-[0.6px] uppercase", !isToday && "text-ink-3")}>{formatDate(day, "weekdayShort")}</span>
+                <span className={cn("text-[11px] font-semibold tracking-[0.6px] uppercase", !isToday && !tone && "text-ink-3")}>{formatDate(day, "weekdayShort")}</span>
                 <span className="font-display text-[24px] leading-none font-semibold tabular-nums">{Number(day.slice(8))}</span>
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -232,7 +237,19 @@ function DiaryDays({ days, today, onOpen }: { days: Day[]; today: string; onOpen
 }
 
 /** The church diary's month at a glance: a dot per colour on each day. */
-function MiniMonth({ today, itemsIn, onDay }: { today: string; itemsIn: (from: string, to: string) => CalItem[]; onDay: (day: string, busy: boolean) => void }) {
+function MiniMonth({
+  today,
+  itemsIn,
+  toneOf,
+  holidays,
+  onDay,
+}: {
+  today: string;
+  itemsIn: (from: string, to: string) => CalItem[];
+  toneOf: (day: string) => Tone;
+  holidays: boolean;
+  onDay: (day: string, busy: boolean) => void;
+}) {
   const [month, setMonth] = useState(() => startOfMonth(today));
   const gridStart = startOfWeek(month);
   const cells = Math.ceil((daysBetween(gridStart, endOfMonth(month)) + 1) / 7) * 7;
@@ -267,8 +284,8 @@ function MiniMonth({ today, itemsIn, onDay }: { today: string; itemsIn: (from: s
         </div>
       </div>
       <div className="mt-3 grid grid-cols-7">
-        {WEEKDAYS.map((d) => (
-          <span key={d} className="pb-1 text-center text-[11px] font-semibold tracking-[0.5px] text-ink-3 uppercase">
+        {WEEKDAYS.map((d, i) => (
+          <span key={d} className={cn("pb-1 text-center text-[11px] font-semibold tracking-[0.5px] uppercase", i >= 5 ? "text-weekend" : "text-ink-3")}>
             {d}
           </span>
         ))}
@@ -276,6 +293,7 @@ function MiniMonth({ today, itemsIn, onDay }: { today: string; itemsIn: (from: s
           const day = addDays(gridStart, k);
           const inMonth = day.slice(0, 7) === month.slice(0, 7);
           const c = dots.get(day) ?? [];
+          const tone = toneOf(day);
           return (
             <button
               key={day}
@@ -288,7 +306,7 @@ function MiniMonth({ today, itemsIn, onDay }: { today: string; itemsIn: (from: s
               <span
                 className={cn(
                   "flex h-6 w-6 items-center justify-center rounded-full text-[13px] tabular-nums",
-                  day === today ? "bg-clay font-semibold text-on-clay" : "text-ink",
+                  day === today ? "bg-clay font-semibold text-on-clay" : tone ? cn(TONE_BG[tone], TONE_TEXT[tone]) : "text-ink",
                 )}
               >
                 {Number(day.slice(8))}
@@ -302,6 +320,7 @@ function MiniMonth({ today, itemsIn, onDay }: { today: string; itemsIn: (from: s
           );
         })}
       </div>
+      <ToneKey holidays={holidays} className="mt-2 px-1" />
     </section>
   );
 }

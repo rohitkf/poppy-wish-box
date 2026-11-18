@@ -3,19 +3,23 @@
 import { useMemo } from "react";
 import { addDays, addMonths, daysBetween, endOfMonth, formatDate, startOfWeek } from "@/lib/calendar";
 import { cn } from "@/lib/client/util";
-import { type CalItem } from "@/components/app/calendar/shared";
+import { TONE_BG, TONE_TEXT, ToneKey, type CalItem, type Tone } from "@/components/app/calendar/shared";
 
 /** Twelve small months; a dot for each colour on a day. Tap a day to open it. */
 export function YearView({
   year,
   today,
   itemsIn,
+  toneOf,
+  holidays,
   onOpenDay,
   onOpenMonth,
 }: {
   year: number;
   today: string;
   itemsIn: (from: string, to: string) => CalItem[];
+  toneOf: (day: string) => Tone;
+  holidays: boolean;
   onOpenDay: (day: string) => void;
   onOpenMonth: (month: string) => void;
 }) {
@@ -37,6 +41,8 @@ export function YearView({
   }, [itemsIn, from, to]);
 
   return (
+    <div className="flex flex-col gap-3">
+    <ToneKey holidays={holidays} className="px-5 lg:px-1" />
     <div className="grid grid-cols-2 gap-x-3 gap-y-5 px-3 sm:grid-cols-3 lg:grid-cols-4 lg:px-0">
       {Array.from({ length: 12 }, (_, i) => {
         const first = addMonths(from, i);
@@ -50,7 +56,7 @@ export function YearView({
             </button>
             <div className="grid grid-cols-7 text-center">
               {["M", "T", "W", "T", "F", "S", "S"].map((d, k) => (
-                <span key={k} className="text-[10px] font-semibold text-ink-3">
+                <span key={k} className={cn("text-[10px] font-semibold", k >= 5 ? "text-weekend" : "text-ink-3")}>
                   {d}
                 </span>
               ))}
@@ -58,6 +64,7 @@ export function YearView({
                 const day = addDays(gridStart, k);
                 if (day.slice(0, 7) !== month) return <span key={day} />;
                 const info = byDay.get(day);
+                const tone = toneOf(day);
                 return (
                   <button
                     key={day}
@@ -70,7 +77,13 @@ export function YearView({
                     <span
                       className={cn(
                         "flex h-5 w-5 items-center justify-center rounded-full text-[11px] tabular-nums",
-                        day === today ? "bg-clay font-semibold text-on-clay" : info?.holiday ? "font-semibold text-teal-text" : day < today ? "text-ink-3" : "text-ink",
+                        day === today
+                          ? "bg-clay font-semibold text-on-clay"
+                          : tone
+                            ? cn(TONE_BG[tone], TONE_TEXT[tone], day < today && "opacity-70")
+                            : day < today
+                              ? "text-ink-3"
+                              : "text-ink",
                       )}
                     >
                       {Number(day.slice(8))}
@@ -85,6 +98,7 @@ export function YearView({
           </section>
         );
       })}
+    </div>
     </div>
   );
 }
