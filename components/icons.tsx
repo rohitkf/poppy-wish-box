@@ -106,6 +106,51 @@ export const Icon = {
       <path d="M20 20l-3.5-3.5" />
     </Svg>
   ),
+  Calendar: (p: P) => (
+    <Svg {...p}>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+      <path d="M3.5 10h17M8 3v4M16 3v4" />
+    </Svg>
+  ),
+  Repeat: (p: P) => (
+    <Svg {...p}>
+      <path d="M17 2.5l3 3-3 3" />
+      <path d="M4 11.5v-1a5 5 0 0 1 5-5h11" />
+      <path d="M7 21.5l-3-3 3-3" />
+      <path d="M20 12.5v1a5 5 0 0 1-5 5H4" />
+    </Svg>
+  ),
+  Bell: (p: P) => (
+    <Svg {...p}>
+      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" />
+      <path d="M10 20.5a2 2 0 0 0 4 0" />
+    </Svg>
+  ),
+  Flag: (p: P) => (
+    <Svg {...p}>
+      <path d="M5 21V4" />
+      <path d="M5 4h11l-2 4 2 4H5" />
+    </Svg>
+  ),
+  Clock: (p: P) => (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </Svg>
+  ),
+  Location: (p: P) => (
+    <Svg {...p}>
+      <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z" />
+      <circle cx="12" cy="10" r="2.3" />
+    </Svg>
+  ),
+  Users: (p: P) => (
+    <Svg {...p}>
+      <circle cx="9" cy="8.5" r="3.2" />
+      <path d="M3 19.5a6 6 0 0 1 12 0" />
+      <path d="M15.5 5.6a3.2 3.2 0 0 1 0 5.8M17.5 14a6 6 0 0 1 3.5 5.5" />
+    </Svg>
+  ),
   Back: (p: P) => (
     <Svg strokeWidth={2} {...p}>
       <path d="M15 5l-7 7 7 7" />

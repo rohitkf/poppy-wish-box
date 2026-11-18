@@ -1,6 +1,8 @@
 import "server-only";
 import { del } from "@vercel/blob";
 import { db } from "@/lib/db";
+import { EVENT_KINDS, isDate, KEEP_DAYS_AFTER } from "@/lib/calendar";
+import { todayIn } from "@/lib/push";
 import type { CustomValue, Mutation, SpaceData } from "@/lib/types";
 
 export class HttpError extends Error {
@@ -148,6 +150,73 @@ function pantryCols(p: Record<string, unknown>): Cols {
   return c;
 }
 
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+const REPEATS = ["none", "weekly", "monthly", "yearly"];
+
+function calDay(v: unknown, name: string, required = false): string | null {
+  if (v === null || v === undefined || v === "") return required ? bad(`${name} is required`) : null;
+  if (!isDate(v) || v < "1900-01-01" || v > "2299-12-31") return bad(`Invalid ${name}`);
+  return v;
+}
+
+function time(v: unknown, name: string): string | null {
+  if (v === null || v === undefined || v === "") return null;
+  return typeof v === "string" && TIME.test(v) ? v : bad(`Invalid ${name}`);
+}
+
+function eventCols(p: Record<string, unknown>): Cols {
+  const c: Cols = {};
+  if ("title" in p) c.title = text(p.title, "Title", 160, { required: true });
+  if ("kind" in p) c.kind = EVENT_KINDS.some((k) => k.key === p.kind) ? p.kind : bad("Invalid kind");
+  if ("color" in p) c.color = typeof p.color === "string" && /^#[0-9a-f]{6}$/i.test(p.color) ? p.color.toLowerCase() : bad("Invalid colour");
+  if ("start_date" in p) c.start_date = calDay(p.start_date, "start date", true);
+  if ("end_date" in p) c.end_date = calDay(p.end_date, "end date", true);
+  if ("start_time" in p) c.start_time = time(p.start_time, "start time");
+  if ("end_time" in p) c.end_time = time(p.end_time, "end time");
+  if ("who" in p) c.who = strArray(p.who, "Who", 8, 40);
+  if ("location" in p) c.location = text(p.location, "Location", 300);
+  if ("notes" in p) c.notes = text(p.notes, "Notes", 5000);
+  if ("repeat" in p) c.repeat = REPEATS.includes(p.repeat as string) ? p.repeat : bad("Invalid repeat");
+  if ("repeat_until" in p) c.repeat_until = calDay(p.repeat_until, "repeat end");
+  if ("skip_dates" in p) {
+    const d = strArray(p.skip_dates, "Skipped dates", 1000, 10);
+    c.skip_dates = d.every(isDate) ? d : bad("Invalid skipped dates");
+  }
+  if ("remind_days" in p) {
+    const n = num(p.remind_days, "reminder", { min: 0, max: 30 });
+    c.remind_days = n === null ? null : Number.isInteger(n) ? n : bad("Invalid reminder");
+  }
+  const sd = c.start_date as string | undefined;
+  const ed = c.end_date as string | undefined;
+  if (sd && ed && ed < sd) bad("The end can't be before the start");
+  if (sd && sd === ed && c.start_time && c.end_time && (c.end_time as string) < (c.start_time as string)) {
+    bad("The end can't be before the start");
+  }
+  return c;
+}
+
+/**
+ * Deletes events that ended more than 90 days ago (repeats: 90 days after their last date;
+ * ones that repeat for ever stay). Runs from the daily job and, at most twice a day, on load.
+ */
+export async function pruneEvents(spaceId: string, today = todayIn()) {
+  const { rowCount } = await db().query(
+    `delete from calendar_events
+      where space_id = $1 and (
+        (repeat = 'none' and end_date < $2::date - $3::int) or
+        (repeat <> 'none' and repeat_until is not null and repeat_until + (end_date - start_date) < $2::date - $3::int))`,
+    [spaceId, today, KEEP_DAYS_AFTER],
+  );
+  return rowCount ?? 0;
+}
+
+let lastPrune = 0;
+function pruneNowAndThen(spaceId: string) {
+  if (Date.now() - lastPrune < 12 * 3_600_000) return;
+  lastPrune = Date.now();
+  pruneEvents(spaceId).catch((e) => console.error("Event clean-up failed", e));
+}
+
 function spaceCols(p: Record<string, unknown>): Cols {
   const c: Cols = {};
   if ("name" in p) c.name = text(p.name, "Space name", 60, { required: true });
@@ -203,7 +272,8 @@ async function deleteBlobs(urls: string[]) {
 
 export async function loadSpaceData(spaceId: string): Promise<SpaceData> {
   const pool = db();
-  const [space, lists, fields, items, photos, presence, pantry] = await Promise.all([
+  pruneNowAndThen(spaceId);
+  const [space, lists, fields, items, photos, presence, pantry, events] = await Promise.all([
     pool.query(
       "select id, name, member_names, priority_labels, default_currency, pantry_locations, expiry_warn_days from spaces where id = $1",
       [spaceId],
@@ -220,6 +290,7 @@ export async function loadSpaceData(spaceId: string): Promise<SpaceData> {
       [spaceId],
     ),
     pool.query("select * from pantry_items where space_id = $1 order by expires_on nulls last, created_at", [spaceId]),
+    pool.query("select * from calendar_events where space_id = $1 order by start_date, start_time nulls first", [spaceId]),
   ]);
   if (!space.rows[0]) throw new HttpError(404, "This space no longer exists.");
   return {
@@ -230,6 +301,7 @@ export async function loadSpaceData(spaceId: string): Promise<SpaceData> {
     photos: photos.rows,
     presence: presence.rows,
     pantry: pantry.rows,
+    events: events.rows,
   };
 }
 
@@ -427,6 +499,44 @@ export async function applyMutation(spaceId: string, m: Mutation): Promise<unkno
     }
     case "pantry.delete": {
       await pool.query("delete from pantry_items where id = $1 and space_id = $2", [uuid(m.id), spaceId]);
+      return null;
+    }
+    case "event.create": {
+      const ev = m.event ?? bad("Missing event");
+      const cols = eventCols({ kind: "other", ...ev });
+      if (!cols.title) bad("Title is required");
+      if (!cols.start_date || !cols.end_date) bad("Dates are required");
+      const actor = text(m.actor, "Name", 40);
+      const keys = ["id", "space_id", ...Object.keys(cols), "added_by", "updated_by"];
+      const values = [uuid(ev.id), spaceId, ...Object.values(cols), actor, actor];
+      const { rows } = await pool.query(
+        `insert into calendar_events (${keys.join(", ")}) values (${keys.map((_, i) => `$${i + 1}`).join(", ")})
+         on conflict (id) do nothing returning *`,
+        values,
+      );
+      return rows[0] ?? null;
+    }
+    case "event.update": {
+      const cols = eventCols(m.patch ?? {});
+      if (!Object.keys(cols).length) return null;
+      cols.updated_by = text(m.actor, "Name", 40);
+      const params: unknown[] = [];
+      const set = assignments(cols, params);
+      params.push(uuid(m.id), spaceId);
+      try {
+        const { rows } = await pool.query(
+          `update calendar_events set ${set.join(", ")} where id = $${params.length - 1} and space_id = $${params.length} returning *`,
+          params,
+        );
+        return rows[0] ?? bad("That event is gone");
+      } catch (e) {
+        // A patch that moves only one end past the other trips the table's check.
+        if ((e as { code?: string }).code === "23514") bad("The end can't be before the start");
+        throw e;
+      }
+    }
+    case "event.delete": {
+      await pool.query("delete from calendar_events where id = $1 and space_id = $2", [uuid(m.id), spaceId]);
       return null;
     }
     default:

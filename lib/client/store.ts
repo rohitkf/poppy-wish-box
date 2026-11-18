@@ -3,7 +3,9 @@
 import { QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type {
+  CalendarEvent,
   ChangeEvent,
+  EventPatch,
   CustomValue,
   FieldDef,
   FieldDefPatch,
@@ -20,6 +22,7 @@ import type {
   SpaceData,
   SpacePatch,
 } from "@/lib/types";
+import { EVENT_FIELDS } from "@/lib/types";
 import { showToast } from "@/lib/client/toast";
 import { storage, uid } from "@/lib/client/util";
 
@@ -213,9 +216,10 @@ export const localPreviews = new Map<string, string>();
 
 // ─── Cache helpers ──────────────────────────────────────────────────────────
 
-type Collection = "lists" | "fields" | "items" | "photos" | "pantry";
+type Collection = "lists" | "fields" | "items" | "photos" | "pantry" | "events";
 const TABLE_TO_KEY: Record<string, Collection | "space" | "presence"> = {
   pantry_items: "pantry",
+  calendar_events: "events",
   lists: "lists",
   field_defs: "fields",
   items: "items",
@@ -660,6 +664,77 @@ export function useActions(me: string | null) {
                 clearTimeout(p.timer);
                 pendingDeletes.delete(id);
                 set((s) => ({ ...s, pantry: [item, ...(s.pantry ?? [])] }));
+              },
+            },
+          },
+          5000,
+        );
+      },
+
+      addEvent(input: Pick<CalendarEvent, "title" | "start_date" | "end_date"> & EventPatch) {
+        const id = uid();
+        const now = new Date().toISOString();
+        const ev: CalendarEvent = {
+          id,
+          space_id: get()?.space.id ?? "",
+          kind: "other",
+          color: "#4a5fc1",
+          start_time: null,
+          end_time: null,
+          who: [],
+          location: null,
+          notes: null,
+          repeat: "none",
+          repeat_until: null,
+          skip_dates: [],
+          remind_days: null,
+          added_by: me,
+          updated_by: me,
+          created_at: now,
+          updated_at: now,
+          ...input,
+          title: input.title.trim(),
+        };
+        set((s) => ({ ...s, events: [...(s.events ?? []), ev] }));
+        const fields = Object.fromEntries(EVENT_FIELDS.map((f) => [f, ev[f]])) as EventPatch;
+        send({ op: "event.create", event: { ...fields, id, title: ev.title, start_date: ev.start_date, end_date: ev.end_date }, actor: me })
+          .then((row) => mergeRow("events", row))
+          .catch(fail);
+        return id;
+      },
+
+      updateEvent(id: string, patch: EventPatch) {
+        const now = new Date().toISOString();
+        set((s) => ({
+          ...s,
+          events: (s.events ?? []).map((e) => (e.id === id ? { ...e, ...patch, updated_at: now, updated_by: me ?? e.updated_by } : e)),
+        }));
+        send({ op: "event.update", id, patch, actor: me })
+          .then((row) => mergeRow("events", row))
+          .catch(fail);
+      },
+
+      /** Deletes an event (every repeat of it), with a few seconds to undo. */
+      removeEvent(id: string) {
+        const ev = get()?.events?.find((e) => e.id === id);
+        if (!ev) return;
+        set((s) => ({ ...s, events: (s.events ?? []).filter((e) => e.id !== id) }));
+        const run = () => {
+          pendingDeletes.delete(id);
+          send({ op: "event.delete", id }).catch(fail);
+        };
+        pendingDeletes.set(id, { timer: setTimeout(run, 5500), run });
+        showToast(
+          {
+            message: `Deleted “${ev.title}”`,
+            action: {
+              label: "Undo",
+              onClick: () => {
+                const p = pendingDeletes.get(id);
+                if (!p) return;
+                clearTimeout(p.timer);
+                pendingDeletes.delete(id);
+                set((s) => ({ ...s, events: [...(s.events ?? []), ev] }));
               },
             },
           },

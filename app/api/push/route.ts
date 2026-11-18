@@ -70,8 +70,8 @@ export async function POST(req: NextRequest) {
     if (!rows[0]) return Response.json({ error: "This device isn't subscribed." }, { status: 404 });
     const ok = await sendPush(rows[0], {
       title: "Ours: reminders are on",
-      body: "You'll get a note each morning when something in the pantry is close to its date.",
-      url: "/?view=pantry",
+      body: "You'll get a note in the morning when pantry food is close to its date, or a calendar event you asked to be reminded of is coming up.",
+      url: "/",
       tag: "ours-test",
     });
     if (!ok) {

@@ -35,6 +35,58 @@ export interface PantryItem {
 export const PANTRY_FIELDS = ["name", "location", "category", "quantity", "unit", "expires_on", "opened_on"] as const;
 export type PantryPatch = Partial<Pick<PantryItem, (typeof PANTRY_FIELDS)[number]>>;
 
+export type Repeat = "none" | "weekly" | "monthly" | "yearly";
+
+export interface CalendarEvent {
+  id: string;
+  space_id: string;
+  title: string;
+  /** A key from EVENT_KINDS in lib/calendar.ts (Day off, Travel, …). */
+  kind: string;
+  /** #rrggbb */
+  color: string;
+  /** YYYY-MM-DD; for a repeating event, the first time it happens. */
+  start_date: string;
+  /** YYYY-MM-DD, inclusive. */
+  end_date: string;
+  /** HH:MM, or null for an all-day event. */
+  start_time: string | null;
+  end_time: string | null;
+  /** Who it's for; empty means everyone. */
+  who: string[];
+  location: string | null;
+  notes: string | null;
+  repeat: Repeat;
+  /** Last date a repeat may start on; null repeats for ever. */
+  repeat_until: string | null;
+  /** Start dates of single occurrences that were deleted from a repeating event. */
+  skip_dates: string[];
+  /** Morning reminder this many days before (0 = on the day); null for none. */
+  remind_days: number | null;
+  added_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const EVENT_FIELDS = [
+  "title",
+  "kind",
+  "color",
+  "start_date",
+  "end_date",
+  "start_time",
+  "end_time",
+  "who",
+  "location",
+  "notes",
+  "repeat",
+  "repeat_until",
+  "skip_dates",
+  "remind_days",
+] as const;
+export type EventPatch = Partial<Pick<CalendarEvent, (typeof EVENT_FIELDS)[number]>>;
+
 export interface List {
   id: string;
   space_id: string;
@@ -108,6 +160,7 @@ export interface SpaceData {
   photos: ItemPhoto[];
   presence: Presence[];
   pantry: PantryItem[];
+  events: CalendarEvent[];
 }
 
 /** Editable item columns (besides custom, which merges per key). */
@@ -155,11 +208,14 @@ export type Mutation =
   | { op: "photo.delete"; id: string }
   | { op: "pantry.create"; item: Pick<PantryItem, "id" | "name"> & PantryPatch; actor: string | null }
   | { op: "pantry.update"; id: string; patch: PantryPatch; actor: string | null }
-  | { op: "pantry.delete"; id: string };
+  | { op: "pantry.delete"; id: string }
+  | { op: "event.create"; event: Pick<CalendarEvent, "id" | "title" | "start_date" | "end_date"> & EventPatch; actor: string | null }
+  | { op: "event.update"; id: string; patch: EventPatch; actor: string | null }
+  | { op: "event.delete"; id: string };
 
 /** Change broadcast from the server over SSE. */
 export interface ChangeEvent {
-  table: "spaces" | "lists" | "field_defs" | "items" | "item_photos" | "presence" | "pantry_items";
+  table: "spaces" | "lists" | "field_defs" | "items" | "item_photos" | "presence" | "pantry_items" | "calendar_events";
   op: "INSERT" | "UPDATE" | "DELETE";
   id: string;
   row: Record<string, unknown> | null;

@@ -6,7 +6,7 @@ import { useCallback, useMemo } from "react";
 export interface Route {
   list?: string;
   item?: string;
-  view?: "settings" | "pantry";
+  view?: "settings" | "pantry" | "calendar";
 }
 
 /**
@@ -19,7 +19,7 @@ export function useNav() {
     () => ({
       list: params.get("list") ?? undefined,
       item: params.get("item") ?? undefined,
-      view: params.get("view") === "settings" ? "settings" : params.get("view") === "pantry" ? "pantry" : undefined,
+      view: (["settings", "pantry", "calendar"] as const).find((v) => v === params.get("view")),
     }),
     [params],
   );
