@@ -6,9 +6,10 @@ import { HereIndicator, Logo } from "@/components/ui/bits";
 import { useSpace } from "@/components/app/SpaceProvider";
 import { AppTabs } from "@/components/app/AppTabs";
 import { useNav } from "@/lib/client/nav";
-import { addDays, addMonths, formatDate, startOfWeek } from "@/lib/calendar";
+import { addDays, addMonths, EVENT_KINDS, formatDate, startOfWeek } from "@/lib/calendar";
 import { cn } from "@/lib/client/util";
-import { openHoliday, usePref, useCalendar, useShowHolidays, type CalItem } from "@/components/app/calendar/shared";
+import { HOLIDAY_COLOR, openHoliday, usePref, useCalendar, useShowHolidays, type CalItem } from "@/components/app/calendar/shared";
+import { EventDetails } from "@/components/app/calendar/EventDetails";
 import { Upcoming } from "@/components/app/calendar/Upcoming";
 import { MonthView } from "@/components/app/calendar/MonthView";
 import { TimeGrid } from "@/components/app/calendar/TimeGrid";
@@ -43,8 +44,10 @@ export function Calendar() {
   const { here } = useSpace();
   const { go } = useNav();
   const [who, setWho] = useState("all");
-  const { today, itemsIn, members } = useCalendar(who);
-  const [showHolidays, setShowHolidays] = useShowHolidays();
+  const [kind, setKind] = useState<string | null>(null);
+  const { today, itemsIn, members, events } = useCalendar(who, kind);
+  const [showHolidays] = useShowHolidays();
+  const [reading, setReading] = useState<{ event: CalendarEvent; occurrence: string } | null>(null);
   const [yearsPref, setYearsPref] = usePref<string>("ours:cal-years", "1");
   const years = Math.min(25, Math.max(1, Number(yearsPref) || 1));
   const [mode, setMode] = useState<Mode>("upcoming");
@@ -71,7 +74,7 @@ export function Calendar() {
 
   const open = (i: CalItem) => {
     if (i.holiday) return openHoliday(i.holiday);
-    if (i.occ) setEditing({ event: i.occ.event, occurrence: i.occ.start });
+    if (i.occ) setReading({ event: i.occ.event, occurrence: i.occ.start });
   };
   const add = (day?: string, time?: string) => setEditing({ draft: { date: day ?? (mode === "upcoming" ? today : sel), time } });
 
@@ -161,31 +164,56 @@ export function Calendar() {
         ) : null}
       </div>
 
-      <div className="no-scrollbar flex gap-2 overflow-x-auto px-5 pt-3 pb-3 lg:px-0">
+      <div className="flex flex-col gap-2 px-5 pt-3 pb-4 lg:px-0">
         {members.length > 1 ? (
-          <>
+          <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 lg:mx-0 lg:px-0" role="group" aria-label="Whose">
             <button type="button" aria-pressed={who === "all"} onClick={() => setWho("all")} className={chip(who === "all")}>
-              Everyone
+              Both of us
             </button>
             {members.map((m) => (
               <button key={m} type="button" aria-pressed={who === m} onClick={() => setWho(who === m ? "all" : m)} className={chip(who === m)}>
                 {m}
               </button>
             ))}
-          </>
+          </div>
         ) : null}
-        <button
-          type="button"
-          aria-pressed={showHolidays}
-          onClick={() => setShowHolidays(!showHolidays)}
-          className={cn(chip(false), "flex items-center gap-1.5", showHolidays && "border-teal-text text-teal-text")}
-        >
-          <Icon.Flag size={14} /> Bank holidays {showHolidays ? "on" : "off"}
-        </button>
+        {/* The legend is the filter, as in the church diary: each type's dot and name. */}
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Show">
+          {[
+            { key: null, label: "Everything", color: null },
+            ...EVENT_KINDS.filter((k) => k.key === kind || events.some((e) => e.kind === k.key)).map((k) => ({ key: k.key, label: k.label, color: k.color })),
+            ...(showHolidays ? [{ key: "holiday", label: "Bank holidays", color: HOLIDAY_COLOR }] : []),
+          ].map((k) => {
+            const on = kind === k.key;
+            return (
+              <button
+                key={k.key ?? "all"}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setKind(on ? null : k.key)}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] transition-colors",
+                  on ? "bg-ink font-medium text-bg" : "bg-sunken text-ink-2 hover:text-ink",
+                )}
+              >
+                {k.color ? <span className="h-2 w-2 rounded-full" style={{ background: k.color }} aria-hidden /> : null}
+                {k.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {mode === "upcoming" ? (
-        <Upcoming today={today} itemsIn={itemsIn} years={years} setYears={(n) => setYearsPref(String(n))} onOpen={open} onAdd={() => add()} />
+        <Upcoming
+          today={today}
+          itemsIn={itemsIn}
+          years={years}
+          setYears={(n) => setYearsPref(String(n))}
+          onOpen={open}
+          onAdd={(d) => add(d)}
+          onOpenDay={(d) => show("day", d)}
+        />
       ) : mode === "month" ? (
         <MonthView
           cursor={at}
@@ -212,6 +240,20 @@ export function Calendar() {
       >
         <Icon.Plus size={20} /> Add event
       </button>
+
+      {reading ? (
+        <EventDetails
+          key={`${reading.event.id}:${reading.occurrence}`}
+          event={events.find((e) => e.id === reading.event.id) ?? reading.event}
+          occurrence={reading.occurrence}
+          open
+          onOpenChange={(v) => !v && setReading(null)}
+          onEdit={() => {
+            setEditing({ event: events.find((e) => e.id === reading.event.id) ?? reading.event, occurrence: reading.occurrence });
+            setReading(null);
+          }}
+        />
+      ) : null}
 
       <EventEditor
         key={editing ? (editing.event ? `${editing.event.id}:${editing.occurrence}` : `new:${editing.draft?.date}:${editing.draft?.time}`) : "none"}

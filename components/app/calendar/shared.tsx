@@ -14,6 +14,7 @@ import {
   compareOccurrences,
   daysBetween,
   formatDate,
+  kindOf,
   occurrences,
   todayLocal,
   whenLabel,
@@ -94,8 +95,11 @@ export function compareItems(a: CalItem, b: CalItem) {
 
 type Official = { years: number[]; holidays: Holiday[] };
 
-/** Today, the events, the filters, and `itemsIn(from, to)` for the views. */
-export function useCalendar(who: string = "all") {
+/**
+ * Today, the events, the filters, and `itemsIn(from, to)` for the views.
+ * `who` narrows to one person's events; `show` to one type ("holiday" for bank holidays only).
+ */
+export function useCalendar(who: string = "all", show: string | null = null) {
   const { data } = useSpace();
   const now = useNow();
   const today = todayLocal(now ? new Date(now) : new Date());
@@ -110,22 +114,26 @@ export function useCalendar(who: string = "all") {
   }).data;
 
   const shown = useMemo(
-    () => (who === "all" ? events : events.filter((e) => !e.who?.length || e.who.includes(who))),
-    [events, who],
+    () =>
+      show === "holiday"
+        ? []
+        : events.filter((e) => (who === "all" || !e.who?.length || e.who.includes(who)) && (!show || e.kind === show)),
+    [events, who, show],
   );
+  const holidays = showHolidays && (!show || show === "holiday");
 
   const itemsIn = useCallback(
     (from: string, to: string) => {
       const out: CalItem[] = [];
       for (const ev of shown) for (const o of occurrences(ev, from, to)) out.push(fromOcc(o));
-      if (showHolidays) {
+      if (holidays) {
         const years: number[] = [];
         for (let y = Number(from.slice(0, 4)); y <= Number(to.slice(0, 4)); y++) years.push(y);
         for (const h of holidaysFor(years, official)) if (h.date >= from && h.date <= to) out.push(fromHoliday(h));
       }
       return out.sort(compareItems);
     },
-    [shown, showHolidays, official],
+    [shown, holidays, official],
   );
 
   return { today, events, itemsIn, members: data.space.member_names ?? [] };
@@ -152,44 +160,92 @@ export function WhoDots({ who, size = 20 }: { who: string[]; size?: number }) {
   );
 }
 
-/** One event in a list: the Upcoming view and a day's list under the month grid. */
+const REPEAT_CHIP = { weekly: "Weekly", monthly: "Monthly", yearly: "Yearly" } as const;
+
+function Chip({ children, color }: { children: React.ReactNode; color?: string }) {
+  return (
+    <span
+      className="shrink-0 rounded-full px-2 py-0.5 text-[11px] leading-[16px] font-semibold tracking-[0.3px] text-ink-2 uppercase"
+      style={{ background: color ? `color-mix(in srgb, ${color} 22%, transparent)` : "var(--sunken)" }}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
+ * One event in a list (the Upcoming list, a day under the month grid). Like the church diary:
+ * the title, then chips for what it is, whether it repeats, and which day of a longer run this
+ * is; notes where they can be read without opening it; and who added it.
+ */
 export function EventCard({ item, today, onOpen, showDay }: { item: CalItem; today: string; onOpen: (i: CalItem) => void; showDay?: string }) {
   const ev = item.occ?.event as CalendarEvent | undefined;
   const days = daysBetween(item.start, item.end) + 1;
-  // A trip that started before the day shown: "Day 3 of 7".
-  const progress = showDay && days > 1 && showDay > item.start ? `Day ${daysBetween(item.start, showDay) + 1} of ${days}` : null;
-  const when = item.holiday ? (item.holiday.substitute ? "Bank holiday (substitute day)" : "Bank holiday") : whenLabel(item.occ!);
   const past = item.end < today;
+  // A trip on its third day says so, or the same name on seven days reads as seven events.
+  // A repeat says it repeats instead: "Day 3 of 29" on a weekly class reads as one long one.
+  const run =
+    days > 1 && ev?.repeat === "none"
+      ? `${past ? `${days} days` : showDay && showDay > item.start ? `Day ${daysBetween(item.start, showDay) + 1} of ${days}` : `${days} days`} · ${formatRange(item.start, item.end)}`
+      : null;
+  const when = item.holiday ? (item.holiday.substitute ? "Substitute day" : null) : item.startTime ? whenLabel(item.occ!) : days > 1 ? null : "All day";
   return (
     <button
       type="button"
       onClick={() => onOpen(item)}
-      className={cn("flex w-full min-w-0 items-stretch gap-3 rounded-[14px] text-left transition-opacity", past && "opacity-60")}
-      style={{ background: tint(item.color, item.holiday ? 10 : 16) }}
+      aria-label={`${item.title}: see the details`}
+      className={cn("flex w-full min-w-0 items-stretch gap-3 rounded-[14px] text-left transition-opacity hover:opacity-90", past && "opacity-60")}
+      style={{ background: tint(item.color, item.holiday ? 10 : 14) }}
     >
       <span className="w-1.5 shrink-0 rounded-l-[14px]" style={{ background: item.color }} aria-hidden />
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5 py-2.5 pr-1">
-        <span className="flex items-center gap-1.5">
+      <span className="flex min-w-0 flex-1 flex-col gap-1 py-2.5 pr-1">
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           {item.holiday ? <Icon.Flag size={14} className="shrink-0 text-teal-text" /> : null}
-          <span className="truncate text-[16px] font-semibold">{item.title}</span>
+          <span className="min-w-0 text-[16px] font-semibold break-words">{item.title}</span>
+          <Chip color={item.color}>{item.holiday ? "Bank holiday" : kindOf(ev!.kind).label}</Chip>
+          {ev && ev.repeat !== "none" ? <Chip>{REPEAT_CHIP[ev.repeat]}</Chip> : null}
+          {run ? <Chip>{run}</Chip> : null}
         </span>
-        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] text-ink-2">
-          <span className="tabular-nums">{progress ?? when}</span>
-          {ev?.location ? (
-            <span className="flex min-w-0 items-center gap-0.5 truncate">
-              <Icon.Location size={13} className="shrink-0" />
-              <span className="truncate">{ev.location}</span>
-            </span>
-          ) : null}
-          {ev && ev.repeat !== "none" ? <Icon.Repeat size={13} aria-label="Repeats" /> : null}
-          {ev && ev.remind_days !== null ? <Icon.Bell size={13} aria-label="Reminder on" /> : null}
-        </span>
+        {when || ev?.location || ev?.remind_days != null ? (
+          <span className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[13px] text-ink-2">
+            {when ? (
+              <span className="flex items-center gap-1 tabular-nums">
+                {item.startTime ? <Icon.Clock size={13} className="shrink-0" /> : null}
+                {when}
+              </span>
+            ) : null}
+            {ev?.location ? (
+              <span className="flex min-w-0 items-center gap-0.5">
+                <Icon.Location size={13} className="shrink-0" />
+                <span className="break-words">{ev.location}</span>
+              </span>
+            ) : null}
+            {ev && ev.remind_days !== null ? (
+              <span className="flex items-center gap-1">
+                <Icon.Bell size={13} className="shrink-0" />
+                {reminderLabel(ev.remind_days)}
+              </span>
+            ) : null}
+          </span>
+        ) : null}
+        {ev?.notes ? <span className="line-clamp-3 text-[13px] whitespace-pre-line text-ink-2 break-words">{ev.notes}</span> : null}
+        {ev?.added_by ? <span className="text-[12px] text-ink-3">Added by {ev.added_by}</span> : null}
       </span>
-      <span className="flex shrink-0 items-center pr-3">
+      <span className="flex shrink-0 items-start pt-2.5 pr-3">
         <WhoDots who={item.who} />
       </span>
     </button>
   );
+}
+
+/** "18–24 Dec", "28 Dec – 3 Jan 2027". */
+export function formatRange(from: string, to: string) {
+  if (from.slice(0, 7) === to.slice(0, 7)) return `${Number(from.slice(8))}–${formatDate(to, "dayMonth")}`;
+  return `${formatDate(from, "dayMonth")} – ${formatDate(to, from.slice(0, 4) === to.slice(0, 4) ? "dayMonth" : "dayMonthYear")}`;
+}
+
+export function reminderLabel(days: number) {
+  return days === 0 ? "Reminder on the day" : days === 1 ? "Reminder the day before" : days === 7 ? "Reminder a week before" : `Reminder ${days} days before`;
 }
 
 /** "Next up" on the lists home, for anything in the coming fortnight. */
