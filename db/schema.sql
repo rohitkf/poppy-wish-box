@@ -135,6 +135,35 @@ create table if not exists push_subscriptions (
   created_at timestamptz not null default now()
 );
 
+-- Shared calendar: days off, trips, appointments, birthdays. Bank holidays are computed in the
+-- app (lib/holidays.ts) and never stored. Events are deleted 90 days after they're over.
+create table if not exists calendar_events (
+  id uuid primary key default gen_random_uuid(),
+  space_id uuid not null references spaces (id) on delete cascade,
+  title text not null check (char_length(title) between 1 and 160),
+  kind text not null default 'other' check (char_length(kind) <= 30),
+  color text not null default '#4a5fc1' check (color ~ '^#[0-9a-fA-F]{6}$'),
+  start_date date not null,
+  end_date date not null,
+  start_time text check (start_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'),
+  end_time text check (end_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'),
+  who text[] not null default '{}',
+  location text check (char_length(location) <= 300),
+  notes text check (char_length(notes) <= 5000),
+  repeat text not null default 'none' check (repeat in ('none', 'weekly', 'monthly', 'yearly')),
+  repeat_until date,
+  skip_dates text[] not null default '{}',
+  remind_days smallint check (remind_days between 0 and 30),
+  added_by text,
+  updated_by text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (end_date >= start_date)
+);
+
+-- Phones get event reminders on their own schedule from pantry ones.
+alter table push_subscriptions add column if not exists last_event_notified_on date;
+
 -- Server-generated keys (the Web Push VAPID key pair), so push needs no setup.
 create table if not exists app_keys (
   name text primary key,
@@ -148,6 +177,7 @@ create index if not exists items_space_idx on items (space_id);
 create index if not exists items_list_idx on items (list_id, status);
 create index if not exists item_photos_item_idx on item_photos (item_id, position);
 create index if not exists pantry_items_space_idx on pantry_items (space_id, expires_on);
+create index if not exists calendar_events_space_idx on calendar_events (space_id, start_date);
 
 create or replace function touch_updated_at() returns trigger language plpgsql as $$
 begin
@@ -162,6 +192,8 @@ drop trigger if exists items_touch on items;
 create trigger items_touch before update on items for each row execute function touch_updated_at();
 drop trigger if exists pantry_items_touch on pantry_items;
 create trigger pantry_items_touch before update on pantry_items for each row execute function touch_updated_at();
+drop trigger if exists calendar_events_touch on calendar_events;
+create trigger calendar_events_touch before update on calendar_events for each row execute function touch_updated_at();
 
 -- Broadcast every change. Rows larger than NOTIFY's 8 kB limit are sent
 -- without the row body; clients then refetch.
@@ -194,7 +226,7 @@ do $$
 declare
   t text;
 begin
-  foreach t in array array['spaces', 'lists', 'field_defs', 'items', 'item_photos', 'pantry_items'] loop
+  foreach t in array array['spaces', 'lists', 'field_defs', 'items', 'item_photos', 'pantry_items', 'calendar_events'] loop
     execute format('drop trigger if exists %1$s_notify on %1$I', t);
     execute format('create trigger %1$s_notify after insert or update or delete on %1$I
                     for each row execute function notify_change()', t);

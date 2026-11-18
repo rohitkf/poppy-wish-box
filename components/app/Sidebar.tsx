@@ -58,6 +58,20 @@ export function Sidebar() {
           <span className="text-[13px] font-normal text-ink-3">{pantry.length}</span>
         )}
       </button>
+      <button
+        type="button"
+        onClick={() => go({ view: "calendar" })}
+        aria-current={route.view === "calendar" ? "page" : undefined}
+        className={cn(
+          "-mx-1 -mt-4 flex h-10 shrink-0 items-center gap-2.5 rounded-[10px] px-2.5 text-left text-[15px]",
+          route.view === "calendar" ? "bg-surface font-semibold" : "hover:bg-surface/60",
+        )}
+      >
+        <span className="flex h-6 w-6 items-center justify-center rounded-md" style={tileStyle("sky")}>
+          <Icon.Calendar size={15} />
+        </span>
+        <span className="flex-1 truncate">Calendar</span>
+      </button>
       <nav className="-mx-1 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-1" aria-label="Lists">
         {lists.map((l) => {
           const n = data.items.filter((i) => i.list_id === l.id && i.status !== "done").length;

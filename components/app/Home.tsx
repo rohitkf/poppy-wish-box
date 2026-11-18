@@ -10,6 +10,7 @@ import { ListEditor } from "@/components/app/ListEditor";
 import { ItemMeta } from "@/components/app/ItemRow";
 import { AppTabs } from "@/components/app/AppTabs";
 import { PantryAlert } from "@/components/app/Pantry";
+import { NextUp } from "@/components/app/calendar/shared";
 import { searchItems } from "@/lib/client/items";
 import { useNav } from "@/lib/client/nav";
 import { useNow } from "@/lib/client/clock";
@@ -172,6 +173,7 @@ export function Home() {
 
       <div className="flex flex-col gap-4 px-5 pt-3 lg:px-0 lg:pt-10">
         <PantryAlert compact onOpen={() => go({ view: "pantry" })} />
+        <NextUp onOpen={() => go({ view: "calendar" })} />
         <div className="flex items-center justify-between">
           <h1 className="font-display text-[36px] font-semibold tracking-[-0.5px] lg:text-[38px]">Our lists</h1>
           {lists.length > 1 && !q ? (

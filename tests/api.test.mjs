@@ -268,6 +268,62 @@ test("expiry reminders: subscribing needs the cookie and a real push service, an
   assert.deepEqual(Object.keys(await cron.json()).sort(), ["ok", "sent"]);
 });
 
+test("calendar events can be added, changed and deleted, and old ones are cleaned up", async () => {
+  assert.equal((await request("/api/holidays")).status, 401);
+  const cookie = await unlock();
+  const before = await (await request("/api/data", { cookie })).json();
+  assert.ok(Array.isArray(before.events));
+
+  const id = randomUUID();
+  const created = await mutate(cookie, {
+    op: "event.create",
+    event: { id, title: "Driving test", kind: "test", color: "#E8803A", start_date: "2031-03-04", end_date: "2031-03-04", start_time: "09:30", end_time: "10:30", who: ["CI"], remind_days: 1 },
+    actor: "CI",
+  });
+  assert.equal(created.title, "Driving test");
+  assert.equal(created.color, "#e8803a");
+  assert.equal(created.start_date, "2031-03-04");
+  assert.equal(created.start_time, "09:30");
+  assert.deepEqual(created.who, ["CI"]);
+  assert.equal(created.repeat, "none");
+
+  const moved = await mutate(cookie, { op: "event.update", id, patch: { start_date: "2031-03-05", end_date: "2031-03-07", start_time: null, end_time: null, repeat: "yearly", skip_dates: ["2032-03-05"] }, actor: "CI" });
+  assert.equal(moved.end_date, "2031-03-07");
+  assert.equal(moved.start_time, null);
+  assert.deepEqual(moved.skip_dates, ["2032-03-05"]);
+
+  const refuse = async (body) => assert.equal((await request("/api/mutate", { method: "POST", cookie, body })).status, 400, JSON.stringify(body));
+  await refuse({ op: "event.update", id, patch: { end_date: "2031-03-01" } }); // before the start
+  await refuse({ op: "event.update", id, patch: { start_date: "2031-02-30" } });
+  await refuse({ op: "event.update", id, patch: { color: "red" } });
+  await refuse({ op: "event.update", id, patch: { start_time: "25:00" } });
+  await refuse({ op: "event.update", id, patch: { repeat: "daily" } });
+  await refuse({ op: "event.create", event: { id: randomUUID(), title: "No dates" } });
+  await refuse({ op: "event.create", event: { id: randomUUID(), title: "Backwards", start_date: "2031-01-02", end_date: "2031-01-01" } });
+
+  // Over for more than 90 days: deleted by the daily run. Repeating for ever: kept.
+  const old = randomUUID();
+  const forever = randomUUID();
+  await mutate(cookie, { op: "event.create", event: { id: old, title: "Old trip", start_date: "2020-01-01", end_date: "2020-01-05" } });
+  await mutate(cookie, { op: "event.create", event: { id: forever, title: "Birthday", start_date: "2000-06-01", end_date: "2000-06-01", repeat: "yearly" } });
+  const cron = await request("/api/cron/expiry");
+  assert.equal(cron.status, 200);
+  const after = await (await request("/api/data", { cookie })).json();
+  assert.ok(!after.events.some((e) => e.id === old), "an event that ended long ago is deleted");
+  assert.ok(after.events.some((e) => e.id === forever), "a yearly event with no end is kept");
+  assert.ok(after.events.some((e) => e.id === id));
+
+  const hol = await request("/api/holidays", { cookie });
+  assert.equal(hol.status, 200);
+  const body = await hol.json();
+  assert.ok(Array.isArray(body.years) && Array.isArray(body.holidays));
+
+  await mutate(cookie, { op: "event.delete", id });
+  await mutate(cookie, { op: "event.delete", id: forever });
+  const gone = await (await request("/api/data", { cookie })).json();
+  assert.ok(!gone.events.some((e) => e.id === id || e.id === forever));
+});
+
 // Keep this last: it pauses unlocking for everyone.
 test("a burst of wrong codes from many networks can't get past the limit for everyone", async () => {
   const cookie = await unlock();

@@ -7,6 +7,8 @@ import { Sheet } from "@/components/ui/sheet";
 import { useSpace } from "@/components/app/SpaceProvider";
 import { NamePicker } from "@/components/app/NamePicker";
 import { PantrySettings } from "@/components/app/PantrySettings";
+import { CalendarSettings } from "@/components/app/calendar/CalendarSettings";
+import { Reminders } from "@/components/app/Reminders";
 import { useNav } from "@/lib/client/nav";
 import { showToast } from "@/lib/client/toast";
 import { storage } from "@/lib/client/util";
@@ -103,8 +105,16 @@ export function Settings() {
         />
       </Section>
 
+      <Section title="Reminders">
+        <Reminders />
+      </Section>
+
       <Section title="Pantry">
         <PantrySettings />
+      </Section>
+
+      <Section title="Calendar">
+        <CalendarSettings />
       </Section>
 
       <Section title="Shared settings">

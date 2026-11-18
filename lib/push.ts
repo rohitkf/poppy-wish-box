@@ -1,6 +1,8 @@
 import "server-only";
 import * as webpush from "web-push";
 import { db } from "@/lib/db";
+import { addDays, compareOccurrences, daysBetween, formatDate, occurrences, type Occurrence } from "@/lib/calendar";
+import type { CalendarEvent } from "@/lib/types";
 
 type Keys = { publicKey: string; privateKey: string };
 let cached: Keys | null = null;
@@ -75,7 +77,6 @@ export function todayIn(timeZone = process.env.APP_TIME_ZONE || "Europe/London",
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 }
 
-const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 
 function when(left: number) {
   if (left < -1) return `expired ${-left} days ago`;
@@ -105,28 +106,62 @@ export async function expiryDigest(spaceId: string, today: string): Promise<Push
   return { title: `Pantry: ${title}`, body: shown.join(", ") + more, url: "/?view=pantry", tag: "ours-expiry" };
 }
 
-/** Sends today's reminder to every subscribed phone that hasn't had it yet. Safe to call repeatedly. */
-export async function sendExpiryReminders(spaceId: string) {
-  const today = todayIn();
-  const msg = await expiryDigest(spaceId, today);
-  if (!msg) return { sent: 0 };
+type Claim = "last_notified_on" | "last_event_notified_on";
+
+/** Sends `msg` to every subscribed phone that hasn't had today's one of this kind. Safe to call repeatedly. */
+async function sendToAll(spaceId: string, today: string, msg: PushMessage, claim: Claim) {
   const pool = db();
   const { rows: subs } = await pool.query(
     `select endpoint, p256dh, auth from push_subscriptions
-      where space_id = $1 and (last_notified_on is null or last_notified_on < $2::date)`,
+      where space_id = $1 and (${claim} is null or ${claim} < $2::date)`,
     [spaceId, today],
   );
   let sent = 0;
   for (const sub of subs as Subscription[]) {
     // Claim the day first, so overlapping runs can't both send.
     const { rowCount } = await pool.query(
-      `update push_subscriptions set last_notified_on = $2::date
-        where endpoint = $1 and (last_notified_on is null or last_notified_on < $2::date)`,
+      `update push_subscriptions set ${claim} = $2::date
+        where endpoint = $1 and (${claim} is null or ${claim} < $2::date)`,
       [sub.endpoint, today],
     );
     if (!rowCount) continue;
     if (await sendPush(sub, msg)) sent++;
     else await pool.query("delete from push_subscriptions where endpoint = $1", [sub.endpoint]);
   }
-  return { sent };
+  return sent;
+}
+
+/** Today's pantry reminder, to every subscribed phone that hasn't had it yet. */
+export async function sendExpiryReminders(spaceId: string, today = todayIn()) {
+  const msg = await expiryDigest(spaceId, today);
+  return { sent: msg ? await sendToAll(spaceId, today, msg, "last_notified_on") : 0 };
+}
+
+function eventWhen(o: Occurrence, today: string) {
+  const n = daysBetween(today, o.start);
+  const day = n === 0 ? "Today" : n === 1 ? "Tomorrow" : formatDate(o.start, "full");
+  const time = o.event.start_time ? ` at ${o.event.start_time}` : "";
+  const who = o.event.who.length ? ` (${o.event.who.join(" & ")})` : "";
+  return `${o.event.title}: ${day}${time}${who}`;
+}
+
+/** The calendar reminder for a space: events whose "remind us" day is today. */
+export async function eventDigest(spaceId: string, today: string): Promise<PushMessage | null> {
+  const { rows } = await db().query("select * from calendar_events where space_id = $1 and remind_days is not null", [spaceId]);
+  const due: Occurrence[] = [];
+  for (const ev of rows as CalendarEvent[]) {
+    const day = addDays(today, ev.remind_days!);
+    for (const o of occurrences(ev, day, day)) if (o.start === day) due.push(o);
+  }
+  if (!due.length) return null;
+  due.sort(compareOccurrences);
+  const lines = due.slice(0, 4).map((o) => eventWhen(o, today));
+  const more = due.length > lines.length ? `\nand ${due.length - lines.length} more` : "";
+  const title = due.length === 1 ? `Coming up: ${due[0].event.title}` : `Coming up: ${due.length} events`;
+  return { title, body: lines.join("\n") + more, url: "/?view=calendar", tag: "ours-events" };
+}
+
+export async function sendEventReminders(spaceId: string, today = todayIn()) {
+  const msg = await eventDigest(spaceId, today);
+  return { sent: msg ? await sendToAll(spaceId, today, msg, "last_event_notified_on") : 0 };
 }

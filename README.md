@@ -24,7 +24,8 @@ store for photos. The same app also ships as a **Docker image** that runs anywhe
 | Offline | Last data cached on the device (readable offline); edits made offline queue in order and replay on reconnect; service worker caches the app shell and photos |
 | Updates | Each build carries its commit id; the live-sync stream reports the server's, and an open app on an older build offers *Reload* |
 | Pantry | A second tab for food at home: where it is (Fridge, Freezer, Pantry, or your own places), quantity, category, opened date and expiry. Items sort by urgency: red once past their date, amber within the warning window (3 days by default, set in Settings), then fresh. A banner and badge show what needs using |
-| Reminders | Each phone can opt in (Settings → Pantry) to a morning Web Push notification listing what's expired or close. A daily Vercel Cron job (`vercel.json`) calls `/api/cron/expiry`; each phone gets at most one a day. The push keys are generated once and kept in the database, so there's nothing to configure. On iPhone, add the app to the Home Screen first |
+| Calendar | A third tab, shared like everything else: days off, trips, appointments, tests, birthdays. Each event has a type, a colour (12 presets or any colour), all-day or timed, who it's for, an optional repeat (weekly, monthly, yearly, with an end date) and an optional morning reminder. Views: an Upcoming list (the next year by default; 2, 3, 5 or any number of years), Day, Week, Month and Year. England & Wales bank holidays come from gov.uk (`/api/holidays`, cached a day) and, for years gov.uk hasn't published, from the usual rules (`lib/holidays.ts`); they're never stored. Events are deleted 90 days after they end (repeats: 90 days after their last date; repeats with no end are kept) by the daily job, to stay within the free database |
+| Reminders | Each phone can opt in (Settings → Reminders) to morning Web Push notifications: pantry food that's expired or close, and calendar events whose reminder is due. A daily Vercel Cron job (`vercel.json`) calls `/api/cron/expiry`, which also cleans up old events; each phone gets at most one of each kind a day. The push keys are generated once and kept in the database, so there's nothing to configure. On iPhone, add the app to the Home Screen first |
 | Health | `/api/health` (the process is up) and `/api/health/ready` (it can reach the database), both open without the code |
 | UI | Tailwind CSS v4, Radix primitives (shadcn‑style), Framer Motion, TanStack Query. Light and dark themes (follows the system, with a manual override) |
 
@@ -87,11 +88,11 @@ docker run -p 3000:3000 \
 | `BLOB_READ_WRITE_TOKEN` | For photos | A private Vercel Blob store |
 | `PG_POOL_MAX` | No | Database connections per instance (default 5) |
 | `CRON_SECRET` | No | If set, `/api/cron/expiry` only accepts `Authorization: Bearer <CRON_SECRET>` (Vercel Cron sends it automatically). Without it the route is open, which only lets someone trigger the day's single reminder early |
-| `APP_TIME_ZONE` | No | Time zone for "today" in reminders (default `Europe/London`) |
+| `APP_TIME_ZONE` | No | Time zone for "today" in reminders and event clean-up (default `Europe/London`) |
 | `VAPID_SUBJECT` | No | Contact for push services (`mailto:` or `https:`). Defaults to the Vercel production URL |
 | `SKIP_DB_SETUP` | No | `1` when a separate step applies the schema (`node scripts/setup.mjs`) |
 
-Outside Vercel, schedule the morning reminder yourself, e.g. a daily cron job running
+Outside Vercel, schedule the morning job (reminders and event clean-up) yourself, e.g. a daily cron job running
 `curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/expiry`.
 
 Serve it over HTTPS, behind a reverse proxy (Caddy, nginx, a cloud load balancer). The session
