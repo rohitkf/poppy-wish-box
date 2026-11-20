@@ -147,6 +147,9 @@ function pantryCols(p: Record<string, unknown>): Cols {
   if ("unit" in p) c.unit = text(p.unit, "Unit", 20);
   if ("expires_on" in p) c.expires_on = day(p.expires_on, "expiry date");
   if ("opened_on" in p) c.opened_on = day(p.opened_on, "opened date");
+  if ("package_expires_on" in p) c.package_expires_on = day(p.package_expires_on, "date on the pack");
+  if ("frozen_on" in p) c.frozen_on = day(p.frozen_on, "frozen date");
+  if ("defrosted_on" in p) c.defrosted_on = day(p.defrosted_on, "defrosted date");
   return c;
 }
 

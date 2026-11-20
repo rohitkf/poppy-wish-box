@@ -236,6 +236,22 @@ test("pantry items can be added, changed, used up and removed", async () => {
   assert.equal(used.quantity, 1);
   assert.equal(used.opened_on.slice(0, 10), "2030-01-01");
 
+  // Into the freezer: the pack's date is kept, the warning date becomes "use frozen by".
+  const frozen = await mutate(cookie, {
+    op: "pantry.update",
+    id,
+    patch: { location: "Freezer", package_expires_on: "2030-01-05", frozen_on: "2030-01-03", expires_on: "2030-04-03" },
+    actor: "CI",
+  });
+  assert.equal(frozen.package_expires_on, "2030-01-05");
+  assert.equal(frozen.frozen_on, "2030-01-03");
+  assert.equal(frozen.expires_on, "2030-04-03");
+  const thawed = await mutate(cookie, { op: "pantry.update", id, patch: { location: "Fridge", defrosted_on: "2030-02-01", expires_on: "2030-02-02" }, actor: "CI" });
+  assert.equal(thawed.defrosted_on, "2030-02-01");
+  assert.equal(thawed.package_expires_on, "2030-01-05");
+  const badFrozen = await request("/api/mutate", { method: "POST", cookie, body: { op: "pantry.update", id, patch: { frozen_on: "yesterday" } } });
+  assert.equal(badFrozen.status, 400);
+
   const bad = await request("/api/mutate", { method: "POST", cookie, body: { op: "pantry.update", id, patch: { expires_on: "next week" } } });
   assert.equal(bad.status, 400);
   const noName = await request("/api/mutate", { method: "POST", cookie, body: { op: "pantry.create", item: { id: randomUUID(), name: " " } } });

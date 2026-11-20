@@ -25,8 +25,13 @@ import {
   sortPantry,
   todayISO,
   type Freshness,
+  freezeLabel,
+  freezerMonths,
+  isFreezer,
+  packLabel,
 } from "@/lib/client/pantry";
 import { cn } from "@/lib/client/util";
+import { formatDate } from "@/lib/calendar";
 import type { PantryItem } from "@/lib/types";
 
 const DEFAULT_LOCATIONS = ["Fridge", "Freezer", "Pantry"];
@@ -61,7 +66,9 @@ function PantryRow({ item, onOpen }: { item: PantryItem; onOpen: () => void }) {
   const { actions } = useSpace();
   const { today, warnDays } = usePantry();
   const f = freshness(item, today, warnDays);
-  const meta = [item.location, quantityLabel(item), item.category, openedLabel(item, today)].filter(Boolean);
+  // Frozen and nowhere near its date: blue, so the freezer stands apart from the fridge.
+  const frozenOk = isFreezer(item.location) && (f === "fresh" || f === "undated");
+  const meta = [item.location, freezeLabel(item, today), packLabel(item), quantityLabel(item), item.category, openedLabel(item, today)].filter(Boolean);
   const many = item.quantity !== null && item.quantity > 1 && !MEASURES.includes(item.unit ?? "");
   return (
     <motion.li layout="position" initial={false} className="flex items-center gap-3 rounded-[14px] px-2 py-2.5">
@@ -69,10 +76,11 @@ function PantryRow({ item, onOpen }: { item: PantryItem; onOpen: () => void }) {
         <span
           className={cn(
             "flex h-11 w-14 shrink-0 flex-col items-center justify-center rounded-xl text-[13px] leading-tight font-semibold tabular-nums",
-            BADGE[f],
+            frozenOk ? "bg-weekend-soft text-weekend" : BADGE[f],
           )}
           aria-hidden
         >
+          {frozenOk ? <Icon.Snow size={12} /> : null}
           {expiryBadge(item, today)}
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -301,8 +309,37 @@ function PantryEditor({
   const [category, setCategory] = useState(item?.category ?? "");
   const [quantity, setQuantity] = useState(item?.quantity != null ? String(item.quantity) : "");
   const [unit, setUnit] = useState(item?.unit ?? "");
+  // `expires` is the date the warnings use; `pack` the date printed on the pack. Until the food is
+  // frozen or defrosted they're the same date.
   const [expires, setExpires] = useState(item?.expires_on ?? "");
+  const [pack, setPack] = useState(item?.package_expires_on ?? (item && !item.frozen_on && !item.defrosted_on ? (item.expires_on ?? "") : ""));
+  const [frozen, setFrozen] = useState(item?.frozen_on ?? "");
+  const [defrosted, setDefrosted] = useState(item?.defrosted_on ?? "");
   const [opened, setOpened] = useState(item?.opened_on ?? "");
+  const inFreezer = isFreezer(location);
+  const freezerPlace = locations.find(isFreezer) ?? "Freezer";
+  const thawPlace = locations.find((l) => !isFreezer(l)) ?? "Fridge";
+
+  /** Into the freezer: keep the pack date, note today, and suggest a "use frozen by" date. */
+  const freeze = (place = freezerPlace) => {
+    setLocation(place);
+    const on = frozen && !defrosted ? frozen : today;
+    setFrozen(on);
+    setDefrosted("");
+    setPack(pack || expires);
+    setExpires(addMonths(on, freezerMonths(category)));
+  };
+  /** Out to defrost: eat within a day (NHS / Food Standards Agency advice). */
+  const defrost = (place = thawPlace) => {
+    setLocation(place);
+    setDefrosted(today);
+    setExpires(addDays(today, 1));
+  };
+  const pickLocation = (l: string) => {
+    if (isFreezer(l) && !inFreezer) freeze(l);
+    else if (!isFreezer(l) && inFreezer && frozen) defrost(l);
+    else setLocation(l);
+  };
   const nameRef = useRef<HTMLInputElement>(null);
   const allLocations = [...new Set([...locations, ...(item ? [item.location] : [])])];
 
@@ -314,6 +351,9 @@ function PantryEditor({
     unit: unit || null,
     expires_on: expires || null,
     opened_on: opened || null,
+    package_expires_on: pack || (!frozen && !defrosted ? expires || null : null),
+    frozen_on: frozen || null,
+    defrosted_on: defrosted || null,
   });
 
   const save = (again: boolean) => {
@@ -326,6 +366,9 @@ function PantryEditor({
       setQuantity("");
       setUnit("");
       setExpires("");
+      setPack("");
+      setFrozen("");
+      setDefrosted("");
       setOpened("");
       nameRef.current?.focus();
     } else onOpenChange(false);
@@ -412,7 +455,7 @@ function PantryEditor({
                 key={l}
                 type="button"
                 aria-pressed={location === l}
-                onClick={() => setLocation(l)}
+                onClick={() => pickLocation(l)}
                 className={cn(
                   "h-10 rounded-full px-4 text-[14px]",
                   location === l ? "bg-teal font-semibold text-white" : "border border-line-2 text-ink-2",
@@ -424,32 +467,129 @@ function PantryEditor({
           </div>
         </fieldset>
 
-        <div className="flex flex-col gap-1.5">
-          <span className={label}>Best before / use by</span>
-          <div className="flex items-center gap-2">
-            <DatePicker label="Best before" value={expires || null} onChange={(v) => setExpires(v ?? "")} placeholder="No date" clearable className="flex-1" />
-            {expires ? (
-              <button type="button" onClick={() => setExpires("")} className="h-11 px-2 text-[14px] text-ink-3">
-                Clear
+        {inFreezer ? (
+          <div className="flex flex-col gap-3 rounded-2xl border border-weekend/25 bg-weekend-soft p-3.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-[14px] font-semibold text-weekend">
+                <Icon.Snow size={16} /> In the freezer
+              </span>
+              <button type="button" onClick={() => defrost()} className="h-9 rounded-full bg-surface px-3.5 text-[13px] font-semibold text-ink shadow-sm">
+                Defrost it
               </button>
-            ) : null}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="text-[13px] font-medium text-ink-2">Date on the pack</span>
+                <DatePicker label="Date on the pack" value={pack || null} onChange={(v) => setPack(v ?? "")} placeholder="None" clearable format="dayMonthYear" />
+              </div>
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="text-[13px] font-medium text-ink-2">Frozen on</span>
+                <DatePicker
+                  label="Frozen on"
+                  value={frozen || null}
+                  max={today}
+                  onChange={(v) => {
+                    const on = v ?? today;
+                    setFrozen(on);
+                    setExpires(addMonths(on, freezerMonths(category)));
+                  }}
+                  format="dayMonthYear"
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-[13px] font-medium text-ink-2">Use frozen by (this is the date we warn you about)</span>
+              <DatePicker label="Use frozen by" value={expires || null} onChange={(v) => setExpires(v ?? "")} placeholder="No date" clearable />
+              <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 pt-1">
+                {[1, 3, 6, 12].map((n) => {
+                  const v = addMonths(frozen || today, n);
+                  return (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setExpires(v)}
+                      className={cn("h-8 shrink-0 rounded-full px-3 text-[13px]", expires === v ? "bg-ink font-medium text-bg" : "bg-surface text-ink-2")}
+                    >
+                      {n === 12 ? "1 year" : `${n} month${n === 1 ? "" : "s"}`}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[12px] text-ink-3">
+                Suggested: {freezerMonths(category)} months{category ? ` for ${category.toLowerCase()}` : ""} from the day it was frozen.
+              </p>
+            </div>
           </div>
-          <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 pt-1">
-            {quick.map((q) => (
-              <button
-                key={q.label}
-                type="button"
-                onClick={() => setExpires(q.value)}
-                className={cn(
-                  "h-8 shrink-0 rounded-full px-3 text-[13px]",
-                  expires === q.value ? "bg-ink font-medium text-bg" : "bg-sunken text-ink-2",
-                )}
-              >
-                {q.label}
+        ) : defrosted ? (
+          <div className="flex flex-col gap-3 rounded-2xl border border-warn-line bg-warn-soft p-3.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[14px] font-semibold text-warn">Defrosted {defrosted === today ? "today" : formatDate(defrosted, "dayMonth")}: eat within 24 hours</span>
+              <button type="button" onClick={() => freeze()} className="h-9 shrink-0 rounded-full bg-surface px-3.5 text-[13px] font-semibold text-ink shadow-sm">
+                Back in freezer
               </button>
-            ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="text-[13px] font-medium text-ink-2">Use by</span>
+                <DatePicker label="Use by" value={expires || null} onChange={(v) => setExpires(v ?? "")} placeholder="No date" clearable format="dayMonthYear" />
+              </div>
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="text-[13px] font-medium text-ink-2">Date on the pack</span>
+                <DatePicker label="Date on the pack" value={pack || null} onChange={(v) => setPack(v ?? "")} placeholder="None" clearable format="dayMonthYear" />
+              </div>
+            </div>
+            {frozen ? <p className="text-[12px] text-ink-3">Was frozen on {formatDate(frozen, "dayMonthYear")}. Only refreeze food that has been cooked since.</p> : null}
           </div>
-        </div>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className={label}>Best before / use by</span>
+              <button type="button" onClick={() => freeze()} className="flex h-8 items-center gap-1.5 rounded-full bg-weekend-soft px-3 text-[13px] font-semibold text-weekend">
+                <Icon.Snow size={14} /> Freeze it
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <DatePicker
+                label="Best before"
+                value={expires || null}
+                onChange={(v) => {
+                  setExpires(v ?? "");
+                  setPack(v ?? "");
+                }}
+                placeholder="No date"
+                clearable
+                className="flex-1"
+              />
+              {expires ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExpires("");
+                    setPack("");
+                  }}
+                  className="h-11 px-2 text-[14px] text-ink-3"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+            <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 pt-1">
+              {quick.map((q) => (
+                <button
+                  key={q.label}
+                  type="button"
+                  onClick={() => {
+                    setExpires(q.value);
+                    setPack(q.value);
+                  }}
+                  className={cn("h-8 shrink-0 rounded-full px-3 text-[13px]", expires === q.value ? "bg-ink font-medium text-bg" : "bg-sunken text-ink-2")}
+                >
+                  {q.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1.5">
