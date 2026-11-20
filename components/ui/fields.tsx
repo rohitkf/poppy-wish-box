@@ -269,6 +269,111 @@ export function DatePicker({
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
+/**
+ * Type the exact time (10:34), nudge it a minute either way, or tap a quick hour and minute.
+ * The boxes take digits only and jump from the hour to the minutes once two are typed.
+ */
+/**
+ * The digits now in a two-digit time box. Typing into a box that's already full starts it again with
+ * the new digit (as if its contents were selected), so "10" over "09" gives 10, not 09 or 91.
+ */
+function fresh(typed: string, before: string) {
+  const d = typed.replace(/\D/g, "");
+  if (d.length <= 2) return d;
+  const added = d.length - before.length;
+  return added > 0 ? d.replace(before, "").slice(0, 2) || d.slice(-added) : d.slice(0, 2);
+}
+
+function ExactTime({ value, onChange, onDone }: { value: string; onChange: (v: string) => void; onDone: () => void }) {
+  const [prev, setPrev] = useState(value);
+  const [hh, setHh] = useState(value.slice(0, 2));
+  const [mm, setMm] = useState(value.slice(3, 5));
+  // Follow changes made with the grids or the nudge buttons, but not our own typing.
+  if (value !== prev) {
+    setPrev(value);
+    if (`${pad(Number(hh) || 0)}:${pad(Number(mm) || 0)}` !== value) {
+      setHh(value.slice(0, 2));
+      setMm(value.slice(3, 5));
+    }
+  }
+  const commit = (h: string, m: string) => {
+    const H = Math.min(23, Number(h) || 0);
+    const M = Math.min(59, Number(m) || 0);
+    onChange(`${pad(H)}:${pad(M)}`);
+  };
+  const nudge = (d: number) => {
+    const t = (((Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5)) + d) % 1440) + 1440) % 1440;
+    onChange(`${pad(Math.floor(t / 60))}:${pad(t % 60)}`);
+  };
+  const box =
+    "h-14 w-[68px] rounded-xl border border-line-2 bg-bg text-center font-display text-[30px] font-semibold tabular-nums outline-none focus:border-teal focus:ring-2 focus:ring-teal/25";
+  const nudgeBtn = "flex h-10 min-w-11 items-center justify-center rounded-xl bg-sunken px-2 text-[13px] font-semibold text-ink-2 hover:text-ink";
+  return (
+    <div className="mb-3 flex items-center justify-between gap-2 border-b border-line-soft pb-3">
+      <button type="button" onClick={() => nudge(-1)} aria-label="One minute earlier" className={nudgeBtn}>
+        −1
+      </button>
+      <div className="flex items-center gap-1.5">
+        <input
+          value={hh}
+          inputMode="numeric"
+          enterKeyHint="next"
+          maxLength={2}
+          aria-label="Hour"
+          onFocus={(e) => e.target.select()}
+          onMouseUp={(e) => e.preventDefault()}
+          onChange={(e) => {
+            const v = fresh(e.target.value, hh);
+            setHh(v);
+            if (v.length === 2) {
+              commit(v, mm);
+              (e.target.parentElement?.querySelector("[aria-label=Minutes]") as HTMLInputElement | null)?.focus();
+            }
+          }}
+          onBlur={(e) => {
+            // Read the box itself: the jump to the minutes blurs it before React has re-rendered.
+            const H = Math.min(23, Number(e.target.value) || 0);
+            setHh(pad(H));
+            commit(String(H), e.target.parentElement?.querySelector<HTMLInputElement>("[aria-label=Minutes]")?.value ?? mm);
+          }}
+          onKeyDown={(e) => e.key === "Enter" && (e.currentTarget.parentElement?.querySelector("[aria-label=Minutes]") as HTMLInputElement | null)?.focus()}
+          className={box}
+        />
+        <span className="font-display text-[28px] font-semibold text-ink-3">:</span>
+        <input
+          value={mm}
+          inputMode="numeric"
+          enterKeyHint="done"
+          maxLength={2}
+          aria-label="Minutes"
+          onFocus={(e) => e.target.select()}
+          onMouseUp={(e) => e.preventDefault()}
+          onChange={(e) => {
+            const v = fresh(e.target.value, mm);
+            setMm(v);
+            if (v.length === 2) commit(hh, v);
+          }}
+          onBlur={(e) => {
+            const M = Math.min(59, Number(e.target.value) || 0);
+            setMm(pad(M));
+            commit(e.target.parentElement?.querySelector<HTMLInputElement>("[aria-label=Hour]")?.value ?? hh, String(M));
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            commit(hh, mm);
+            onDone();
+          }}
+          className={box}
+        />
+      </div>
+      <button type="button" onClick={() => nudge(1)} aria-label="One minute later" className={nudgeBtn}>
+        +1
+      </button>
+    </div>
+  );
+}
+
 export function TimePicker({ value, onChange, label, className }: { value: string; onChange: (v: string) => void; label: string; className?: string }) {
   const [open, setOpen] = useState(false);
   const h = Number(value.slice(0, 2)) || 0;
@@ -283,6 +388,7 @@ export function TimePicker({ value, onChange, label, className }: { value: strin
         </button>
       </Popover.Trigger>
       <PopoverPanel className="w-[284px]">
+        <ExactTime value={value} onChange={onChange} onDone={() => setOpen(false)} />
         <div className="mb-1 text-[12px] font-semibold tracking-[0.6px] text-ink-3 uppercase">Hour</div>
         <div className="grid grid-cols-6 gap-1">
           {Array.from({ length: 24 }, (_, i) => (
@@ -291,7 +397,7 @@ export function TimePicker({ value, onChange, label, className }: { value: strin
             </button>
           ))}
         </div>
-        <div className="mt-3 mb-1 text-[12px] font-semibold tracking-[0.6px] text-ink-3 uppercase">Minutes</div>
+        <div className="mt-3 mb-1 text-[12px] font-semibold tracking-[0.6px] text-ink-3 uppercase">Quick minutes</div>
         <div className="grid grid-cols-6 gap-1">
           {Array.from({ length: 12 }, (_, i) => i * 5).map((mm) => (
             <button
@@ -308,6 +414,9 @@ export function TimePicker({ value, onChange, label, className }: { value: strin
             </button>
           ))}
         </div>
+        <button type="button" onClick={() => setOpen(false)} className="mt-3 h-10 w-full rounded-xl bg-ink text-[14px] font-semibold text-bg">
+          Done
+        </button>
       </PopoverPanel>
     </Popover.Root>
   );
