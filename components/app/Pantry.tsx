@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { HereIndicator, Logo } from "@/components/ui/bits";
 import { Sheet } from "@/components/ui/sheet";
+import { cleanNumber, DatePicker, Select } from "@/components/ui/fields";
 import { useSpace } from "@/components/app/SpaceProvider";
 import { AppTabs } from "@/components/app/AppTabs";
 import { useNow } from "@/lib/client/clock";
@@ -424,11 +425,9 @@ function PantryEditor({
         </fieldset>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="p-expires" className={label}>
-            Best before / use by
-          </label>
+          <span className={label}>Best before / use by</span>
           <div className="flex items-center gap-2">
-            <input id="p-expires" type="date" value={expires} onChange={(e) => setExpires(e.target.value)} className={cn(field, "flex-1")} />
+            <DatePicker label="Best before" value={expires || null} onChange={(v) => setExpires(v ?? "")} placeholder="No date" clearable className="flex-1" />
             {expires ? (
               <button type="button" onClick={() => setExpires("")} className="h-11 px-2 text-[14px] text-ink-3">
                 Clear
@@ -456,42 +455,37 @@ function PantryEditor({
           <label className="flex flex-col gap-1.5">
             <span className={label}>Quantity</span>
             <input
-              type="number"
+              type="text"
               inputMode="decimal"
-              min={0}
-              step="any"
               value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
+              onChange={(e) => setQuantity(cleanNumber(e.target.value))}
               placeholder="e.g. 2"
               className={field}
             />
           </label>
-          <label className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5">
             <span className={label}>Unit</span>
-            <select value={unit} onChange={(e) => setUnit(e.target.value)} className={field}>
-              {[...new Set([...PANTRY_UNITS, unit])].map((u) => (
-                <option key={u} value={u}>
-                  {u || "items"}
-                </option>
-              ))}
-            </select>
-          </label>
+            <Select
+              label="Unit"
+              value={unit}
+              onChange={setUnit}
+              options={[...new Set([...PANTRY_UNITS, unit])].map((u) => ({ value: u, label: u || "items" }))}
+            />
+          </div>
         </div>
 
-        <label className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5">
           <span className={label}>Category</span>
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className={field}>
-            <option value="">None</option>
-            {[...new Set([...PANTRY_CATEGORIES, ...(category ? [category] : [])])].map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
-        </label>
+          <Select
+            label="Category"
+            value={category}
+            onChange={setCategory}
+            options={[{ value: "", label: "None" }, ...[...new Set([...PANTRY_CATEGORIES, ...(category ? [category] : [])])].map((c) => ({ value: c, label: c }))]}
+          />
+        </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="p-opened" className={label}>
-            Opened
-          </label>
+          <span className={label}>Opened</span>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -512,7 +506,15 @@ function PantryEditor({
             >
               Today
             </button>
-            <input id="p-opened" type="date" value={opened} max={today} onChange={(e) => setOpened(e.target.value)} className={cn(field, "flex-1")} />
+            <DatePicker
+              label="Opened on"
+              value={opened && opened !== today ? opened : null}
+              max={today}
+              onChange={(v) => setOpened(v ?? "")}
+              placeholder="Another day"
+              format="dayMonthYear"
+              className="flex-1"
+            />
           </div>
         </div>
         <button type="submit" className="sr-only">

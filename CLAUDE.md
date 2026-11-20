@@ -12,3 +12,12 @@ with `main` again, and confirm the Vercel production deployment serves the new c
 reports the build). Database changes need no separate step: production builds apply `db/schema.sql`
 themselves. Keep every schema change add-only and idempotent, as AGENTS.md says, so the release
 can go out on its own. Still never push to `main` directly.
+
+## Design (the owner's standing instruction)
+
+No system UI anywhere in the app: every control is drawn with the app's own design system. Never use
+the browser's or phone's built-in pickers or widgets (`<select>`, `type="date"`, `"time"`, `"color"`,
+`"checkbox"`, number spinners, `alert`/`confirm`/`prompt`). Use the shared controls in
+`components/ui/fields.tsx` (Select, DatePicker, TimePicker, ColorPicker, Checkbox, Stepper,
+`cleanNumber` for numeric text inputs), `components/ui/menu.tsx` and `components/ui/sheet.tsx`,
+and add to them when something new is needed.

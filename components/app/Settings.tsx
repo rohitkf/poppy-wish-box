@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Icon, ListGlyph } from "@/components/icons";
 import { Segmented, tileStyle } from "@/components/ui/bits";
 import { Sheet } from "@/components/ui/sheet";
+import { Select } from "@/components/ui/fields";
 import { useSpace } from "@/components/app/SpaceProvider";
 import { NamePicker } from "@/components/app/NamePicker";
 import { PantrySettings } from "@/components/app/PantrySettings";
@@ -139,18 +140,17 @@ export function Settings() {
               ))}
             </div>
           </div>
-          <label className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3">
             <span className="text-[14px] font-semibold">Default currency</span>
-            <select
+            <Select
+              label="Default currency"
+              align="end"
+              className="w-28 bg-bg text-[15px]"
               value={data.space.default_currency}
-              onChange={(e) => actions.updateSpace({ default_currency: e.target.value })}
-              className="h-11 rounded-xl border border-line-2 bg-bg px-3 text-[15px]"
-            >
-              {["GBP", "EUR", "USD", "INR", "AUD", "CAD", "NZD", "CHF", "JPY", "SEK", "AED", "SGD"].map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </label>
+              onChange={(v) => actions.updateSpace({ default_currency: v })}
+              options={["GBP", "EUR", "USD", "INR", "AUD", "CAD", "NZD", "CHF", "JPY", "SEK", "AED", "SGD"].map((c) => ({ value: c, label: c }))}
+            />
+          </div>
         </div>
       </Section>
 

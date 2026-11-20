@@ -4,6 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useRef, useState } from "react";
 import { Icon, ListGlyph } from "@/components/icons";
 import { Segmented, tileStyle } from "@/components/ui/bits";
+import { Checkbox, cleanNumber, DatePicker, Select } from "@/components/ui/fields";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from "@/components/ui/menu";
 import { useSpace } from "@/components/app/SpaceProvider";
 import { PhotoThumb, photoSrc } from "@/components/app/Photo";
@@ -52,6 +53,7 @@ function TextField({
   placeholder,
   type = "text",
   inputMode,
+  numeric,
 }: {
   id: string;
   value: string;
@@ -59,6 +61,8 @@ function TextField({
   placeholder?: string;
   type?: string;
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  /** A number typed as text: no spinner arrows, only digits, a point and a minus get in. */
+  numeric?: boolean;
 }) {
   const { draft, setDraft, bind } = useDraft(value);
   return (
@@ -68,7 +72,7 @@ function TextField({
       inputMode={inputMode}
       value={draft}
       placeholder={placeholder}
-      onChange={(e) => setDraft(e.target.value)}
+      onChange={(e) => setDraft(numeric ? cleanNumber(e.target.value, true) : e.target.value)}
       {...bind}
       onBlur={() => draft !== value && onSave(draft)}
       onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
@@ -130,32 +134,26 @@ function CustomField({ item, field }: { item: Item; field: FieldDef }) {
     case "checkbox":
       return (
         <Row label={field.label} htmlFor={id}>
-          <input
-            id={id}
-            type="checkbox"
-            checked={raw === true}
-            onChange={(e) => save(e.target.checked || null)}
-            className="h-[22px] w-[22px] accent-[var(--teal)]"
-          />
+          <Checkbox id={id} label={field.label} checked={raw === true} onChange={(v) => save(v || null)} />
         </Row>
       );
     case "select":
       return (
         <Row label={field.label} htmlFor={id}>
-          <select
-            id={id}
+          <Select
+            look="inline"
+            align="end"
+            label={field.label}
+            placeholder="—"
+            className="max-w-[60%]"
             value={typeof raw === "string" ? raw : ""}
-            onChange={(e) => save(e.target.value || null)}
-            className="max-w-[60%] rounded-md bg-transparent py-1 text-right text-[15px] font-medium outline-none focus:bg-sunken"
-          >
-            <option value="">—</option>
-            {field.options.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
-            ))}
-            {typeof raw === "string" && raw && !field.options.includes(raw) ? <option value={raw}>{raw}</option> : null}
-          </select>
+            onChange={(v) => save(v || null)}
+            options={[
+              { value: "", label: "—" },
+              ...field.options.map((o) => ({ value: o, label: o })),
+              ...(typeof raw === "string" && raw && !field.options.includes(raw) ? [{ value: raw, label: raw }] : []),
+            ]}
+          />
         </Row>
       );
     case "number":
@@ -163,7 +161,7 @@ function CustomField({ item, field }: { item: Item; field: FieldDef }) {
         <Row label={field.label} htmlFor={id}>
           <TextField
             id={id}
-            type="number"
+            numeric
             inputMode="decimal"
             value={raw === null || raw === undefined ? "" : String(raw)}
             onSave={(v) => save(v === "" || !Number.isFinite(Number(v)) ? null : Number(v))}
@@ -174,13 +172,7 @@ function CustomField({ item, field }: { item: Item; field: FieldDef }) {
     case "date":
       return (
         <Row label={field.label} htmlFor={id}>
-          <input
-            id={id}
-            type="date"
-            value={typeof raw === "string" ? raw : ""}
-            onChange={(e) => save(e.target.value || null)}
-            className={cn(inputCls, "max-w-[190px]")}
-          />
+          <DatePicker look="inline" label={field.label} value={typeof raw === "string" && raw ? raw : null} onChange={(v) => save(v)} placeholder="—" clearable />
         </Row>
       );
     case "link": {
@@ -379,7 +371,7 @@ export function ItemDetail({ item, onClose, variant }: { item: Item; onClose: ()
           <Row label="Budget" htmlFor="f-price">
             <TextField
               id="f-price"
-              type="number"
+              numeric
               inputMode="decimal"
               value={item.price === null ? "" : String(item.price)}
               placeholder="—"
@@ -390,24 +382,24 @@ export function ItemDetail({ item, onClose, variant }: { item: Item; onClose: ()
                 })
               }
             />
-            <select
-              aria-label="Currency"
+            <Select
+              look="inline"
+              align="end"
+              label="Currency"
+              className="shrink-0 text-[14px] text-ink-3"
               value={item.currency ?? data.space.default_currency}
-              onChange={(e) => actions.updateItem(item.id, { currency: e.target.value })}
-              className="rounded-md bg-transparent py-1 text-[14px] text-ink-3 outline-none focus:bg-sunken"
-            >
-              {[...new Set([data.space.default_currency, ...CURRENCIES])].map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
+              onChange={(v) => actions.updateItem(item.id, { currency: v })}
+              options={[...new Set([data.space.default_currency, ...CURRENCIES])].map((c) => ({ value: c, label: c }))}
+            />
           </Row>
           <Row label="Target date" htmlFor="f-date">
-            <input
-              id="f-date"
-              type="date"
-              value={item.target_date ?? ""}
-              onChange={(e) => actions.updateItem(item.id, { target_date: e.target.value || null })}
-              className={cn(inputCls, "max-w-[190px]")}
+            <DatePicker
+              look="inline"
+              label="Target date"
+              value={item.target_date}
+              onChange={(v) => actions.updateItem(item.id, { target_date: v })}
+              placeholder="—"
+              clearable
             />
           </Row>
           <Row label="Link" htmlFor="f-url">

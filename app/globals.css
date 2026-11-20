@@ -221,3 +221,28 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
 }
+
+/* No browser-drawn bits on the app's own inputs: the search box's clear cross, number spinners,
+   and the password reveal some browsers add. */
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+/* Notes boxes grow with the sheet; the browser's resize grip is not ours. */
+textarea {
+  resize: none;
+}

@@ -237,11 +237,11 @@ export function EventCard({ item, today, onOpen, showDay }: { item: CalItem; tod
   const ev = item.occ?.event as CalendarEvent | undefined;
   const days = daysBetween(item.start, item.end) + 1;
   const past = item.end < today;
-  // A trip on its third day says so, or the same name on seven days reads as seven events.
-  // A repeat says it repeats instead: "Day 3 of 29" on a weekly class reads as one long one.
+  // Anything over several days is listed on each of them and says which one this is, or the
+  // same name on seven days reads as seven events. (Each repeat counts its own days.)
   const run =
-    days > 1 && ev?.repeat === "none"
-      ? `${past ? `${days} days` : showDay && showDay > item.start ? `Day ${daysBetween(item.start, showDay) + 1} of ${days}` : `${days} days`} · ${formatRange(item.start, item.end)}`
+    days > 1 && !item.holiday
+      ? `${showDay && showDay >= item.start && showDay <= item.end ? `Day ${daysBetween(item.start, showDay) + 1} of ${days}` : `${days} days`} · ${formatRange(item.start, item.end)}`
       : null;
   const when = item.holiday ? (item.holiday.substitute ? "Substitute day" : null) : item.startTime ? whenLabel(item.occ!) : days > 1 ? null : "All day";
   return (

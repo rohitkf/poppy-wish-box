@@ -200,6 +200,11 @@ export function Home() {
             aria-label="Search all lists"
             className="min-w-0 flex-1 bg-transparent text-[16px] text-ink outline-none"
           />
+          {q ? (
+            <button type="button" onClick={() => setQ("")} aria-label="Clear search" className="-mr-1.5 flex h-8 w-8 items-center justify-center rounded-full text-ink-3 hover:bg-line">
+              <Icon.Close size={16} />
+            </button>
+          ) : null}
         </label>
       </div>
 
