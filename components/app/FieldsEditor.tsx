@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Icon } from "@/components/icons";
+import { Select } from "@/components/ui/fields";
 import { Sheet } from "@/components/ui/sheet";
 import { useSpace } from "@/components/app/SpaceProvider";
 import type { FieldDef, FieldType, List } from "@/lib/types";
@@ -44,18 +45,14 @@ function FieldRow({ field, first, last }: { field: FieldDef; first: boolean; las
           maxLength={60}
           className="h-10 min-w-0 flex-1 rounded-lg bg-transparent px-1 text-[15px] font-semibold outline-none focus:bg-sunken"
         />
-        <select
+        <Select
+          label="Field type"
+          align="end"
+          className="h-10 w-[7.5rem] rounded-lg px-2.5 text-[14px]"
           value={field.type}
-          onChange={(e) => actions.updateField(field.id, { type: e.target.value as FieldType })}
-          aria-label="Field type"
-          className="h-10 rounded-lg border border-line-2 bg-surface px-2 text-[14px]"
-        >
-          {FIELD_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => actions.updateField(field.id, { type: v })}
+          options={FIELD_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+        />
         <div className="flex">
           <button type="button" disabled={first} onClick={() => move(-1)} aria-label="Move up" className="flex h-10 w-8 items-center justify-center rounded-lg text-ink-2 disabled:opacity-30">
             <Icon.Chevron size={16} className="rotate-180" />
@@ -131,18 +128,14 @@ export function FieldsEditor({ open, onOpenChange, list }: { open: boolean; onOp
             maxLength={60}
             className="h-11 min-w-0 flex-1 rounded-xl border border-line-2 bg-surface px-3 text-[15px] outline-none"
           />
-          <select
+          <Select
+            label="New field type"
+            align="end"
+            className="w-[8rem] px-2.5 text-[15px]"
             value={type}
-            onChange={(e) => setType(e.target.value as FieldType)}
-            aria-label="New field type"
-            className="h-11 rounded-xl border border-line-2 bg-surface px-2 text-[15px]"
-          >
-            {FIELD_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
+            onChange={setType}
+            options={FIELD_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+          />
         </div>
         {type === "select" ? (
           <input

@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
-import { addDays, addMonths, daysBetween, endOfMonth, formatDate, KEEP_DAYS_AFTER, relativeDay, startOfMonth, startOfWeek } from "@/lib/calendar";
+import { addDays, addMonths, daysBetween, endOfMonth, formatDate, KEEP_DAYS_AFTER, relativeDay, startOfMonth, startOfWeek, weekday } from "@/lib/calendar";
 import { cn } from "@/lib/client/util";
+import { Stepper } from "@/components/ui/fields";
 import { EventCard, TONE_BG, TONE_TEXT, ToneKey, type CalItem, type Tone } from "@/components/app/calendar/shared";
 import { WEEKDAYS } from "@/components/app/calendar/MonthView";
 
@@ -13,12 +14,23 @@ const NEXT_PAGE = 20;
 
 type Day = { day: string; items: CalItem[] };
 
-/** Groups items by the day they're listed on: the day they start, or `clamp` if already under way. */
-function byDay(items: CalItem[], clamp: string) {
+/** Runs longer than this show on their first and last day and each Monday, not every day. */
+const DAILY_UP_TO = 31;
+
+/**
+ * Groups items by day, listing anything that runs over several days on each of them ("Day 2 of 3"),
+ * as the church diary does: a two-day conference is on both days. Only days within from…to count.
+ */
+function byDay(items: CalItem[], from: string, to: string) {
   const m = new Map<string, CalItem[]>();
   for (const it of items) {
-    const day = it.start < clamp ? clamp : it.start;
-    m.set(day, [...(m.get(day) ?? []), it]);
+    const first = it.start < from ? from : it.start;
+    const last = it.end > to ? to : it.end;
+    const long = daysBetween(it.start, it.end) + 1 > DAILY_UP_TO;
+    for (let d = first; d <= last; d = addDays(d, 1)) {
+      if (long && d !== first && d !== it.end && weekday(d) !== 0) continue;
+      m.set(d, [...(m.get(d) ?? []), it]);
+    }
   }
   return [...m].map(([day, items]) => ({ day, items }));
 }
@@ -54,11 +66,12 @@ export function Upcoming({
   const [morePast, setMorePast] = useState(0);
   const to = addDays(addMonths(today, 12 * years), -1);
 
-  const coming = useMemo(() => byDay(itemsIn(today, to), today).sort((a, b) => (a.day < b.day ? -1 : 1)), [itemsIn, today, to]);
+  const coming = useMemo(() => byDay(itemsIn(today, to), today, to).sort((a, b) => (a.day < b.day ? -1 : 1)), [itemsIn, today, to]);
   const past = useMemo(() => {
     const from = addDays(today, -KEEP_DAYS_AFTER);
-    const ended = itemsIn(from, addDays(today, -1)).filter((i) => i.end < today && !i.holiday);
-    return byDay(ended, from).sort((a, b) => (a.day < b.day ? 1 : -1));
+    const yesterday = addDays(today, -1);
+    const ended = itemsIn(from, yesterday).filter((i) => !i.holiday);
+    return byDay(ended, from, yesterday).sort((a, b) => (a.day < b.day ? 1 : -1));
   }, [itemsIn, today]);
 
   const shown = coming.slice(0, FIRST_PAGE + more);
@@ -94,22 +107,7 @@ export function Upcoming({
               </button>
             ))}
             {custom ? (
-              <label className="flex h-8 items-center gap-1 rounded-full bg-ink pr-3 pl-1 text-[13px] font-medium text-bg">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  max={25}
-                  value={years}
-                  onChange={(e) => {
-                    const n = Math.round(Number(e.target.value));
-                    if (n >= 1 && n <= 25) setYears(n);
-                  }}
-                  aria-label="Years ahead"
-                  className="h-6 w-11 rounded-full bg-bg text-center text-[14px] text-ink tabular-nums outline-none"
-                />
-                yrs
-              </label>
+              <Stepper label="years ahead" value={years} min={1} max={25} onChange={setYears} unit={(n) => `${n} ${n === 1 ? "year" : "yrs"}`} />
             ) : (
               <button type="button" onClick={() => setCustom(true)} className="h-8 rounded-full border border-line-2 px-3 text-[13px] text-ink-2 hover:bg-sunken">
                 Other

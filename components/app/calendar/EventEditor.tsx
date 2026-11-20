@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Icon } from "@/components/icons";
 import { Segmented } from "@/components/ui/bits";
 import { Sheet } from "@/components/ui/sheet";
+import { ColorPicker, DatePicker, TimePicker } from "@/components/ui/fields";
 import { useSpace } from "@/components/app/SpaceProvider";
 import { addDays, daysBetween, EVENT_COLORS, EVENT_KINDS, formatDate, kindOf, minutes, REMINDERS, repeatLabel } from "@/lib/calendar";
 import { showToast } from "@/lib/client/toast";
@@ -211,25 +212,14 @@ export function EventEditor({
                 {color === c.hex ? <Icon.Check size={16} /> : null}
               </button>
             ))}
-            <label
-              className={cn(
-                "relative flex h-9 w-9 cursor-pointer items-center justify-center overflow-hidden rounded-full",
-                !EVENT_COLORS.some((c) => c.hex === color) && "ring-2 ring-ink ring-offset-2 ring-offset-bg",
-              )}
-              style={{ background: EVENT_COLORS.some((c) => c.hex === color) ? "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)" : color }}
-              title="Any colour"
-            >
-              <input
-                type="color"
-                value={color}
-                onChange={(e) => {
-                  setColor(e.target.value);
-                  setColorChosen(true);
-                }}
-                aria-label="Pick any colour"
-                className="absolute inset-0 cursor-pointer opacity-0"
-              />
-            </label>
+            <ColorPicker
+              value={color}
+              presets={EVENT_COLORS.map((c) => c.hex)}
+              onChange={(c) => {
+                setColor(c);
+                setColorChosen(true);
+              }}
+            />
           </div>
         </fieldset>
 
@@ -251,11 +241,11 @@ export function EventEditor({
           </div>
           <div className="grid grid-cols-[3.5rem_minmax(0,1fr)_auto] items-center gap-2">
             <span className="text-[14px] text-ink-3">Starts</span>
-            <input type="date" value={startDate} onChange={(e) => moveStartDate(e.target.value)} aria-label="Start date" className={field} />
-            {!allDay ? <input type="time" value={startTime} onChange={(e) => moveStartTime(e.target.value)} aria-label="Start time" className={cn(field, "w-[7.5rem]")} /> : <span />}
+            <DatePicker label="Start date" value={startDate || null} onChange={(v) => v && moveStartDate(v)} format="dayMonthYear" />
+            {!allDay ? <TimePicker label="Start time" value={startTime} onChange={moveStartTime} className="w-[6.5rem]" /> : <span />}
             <span className="text-[14px] text-ink-3">Ends</span>
-            <input type="date" value={endDate} min={startDate} onChange={(e) => e.target.value && setEndDate(e.target.value)} aria-label="End date" className={field} />
-            {!allDay ? <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} aria-label="End time" className={cn(field, "w-[7.5rem]")} /> : <span />}
+            <DatePicker label="End date" value={endDate || null} min={startDate || undefined} onChange={(v) => v && setEndDate(v)} format="dayMonthYear" />
+            {!allDay ? <TimePicker label="End time" value={endTime} onChange={setEndTime} className="w-[6.5rem]" /> : <span />}
           </div>
           {endDate < startDate || timeBackwards ? (
             <p className="text-[13px] font-medium text-danger">The end is before the start.</p>
@@ -308,7 +298,7 @@ export function EventEditor({
               <p className="text-[13px] text-ink-3">{repeatLabel({ repeat, repeat_until: until || null, start_date: startDate })}</p>
               <div className="flex items-center gap-2">
                 <span className="text-[14px] text-ink-3">Until</span>
-                <input type="date" value={until} min={startDate} onChange={(e) => setUntil(e.target.value)} aria-label="Repeat until" className={cn(field, "flex-1")} />
+                <DatePicker label="Repeat until" value={until || null} min={startDate || undefined} onChange={(v) => setUntil(v ?? "")} placeholder="No end date" className="flex-1" />
                 {until ? (
                   <button type="button" onClick={() => setUntil("")} className="h-11 px-2 text-[14px] text-ink-3">
                     For ever
