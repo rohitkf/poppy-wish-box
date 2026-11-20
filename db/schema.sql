@@ -123,6 +123,12 @@ create table if not exists pantry_items (
   updated_at timestamptz not null default now()
 );
 
+-- Freezing: the date printed on the pack is kept apart from the date the warnings use, which
+-- becomes a "use frozen by" date while the food is in the freezer and the day after defrosting.
+alter table pantry_items add column if not exists package_expires_on date;
+alter table pantry_items add column if not exists frozen_on date;
+alter table pantry_items add column if not exists defrosted_on date;
+
 -- Phones that asked for expiry reminders (Web Push). Never broadcast: no notify trigger.
 create table if not exists push_subscriptions (
   endpoint text primary key check (char_length(endpoint) <= 1000),

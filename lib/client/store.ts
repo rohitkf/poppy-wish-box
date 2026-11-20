@@ -22,7 +22,7 @@ import type {
   SpaceData,
   SpacePatch,
 } from "@/lib/types";
-import { EVENT_FIELDS } from "@/lib/types";
+import { EVENT_FIELDS, PANTRY_FIELDS } from "@/lib/types";
 import { showToast } from "@/lib/client/toast";
 import { storage, uid } from "@/lib/client/util";
 
@@ -617,6 +617,9 @@ export function useActions(me: string | null) {
           unit: null,
           expires_on: null,
           opened_on: null,
+          package_expires_on: null,
+          frozen_on: null,
+          defrosted_on: null,
           added_by: me,
           updated_by: me,
           created_at: now,
@@ -625,8 +628,8 @@ export function useActions(me: string | null) {
           name: input.name.trim(),
         };
         set((s) => ({ ...s, pantry: [item, ...(s.pantry ?? [])] }));
-        const { name, location, category, quantity, unit, expires_on, opened_on } = item;
-        send({ op: "pantry.create", item: { id, name, location, category, quantity, unit, expires_on, opened_on }, actor: me })
+        const fields = Object.fromEntries(PANTRY_FIELDS.map((f) => [f, item[f]])) as PantryPatch;
+        send({ op: "pantry.create", item: { ...fields, id, name: item.name }, actor: me })
           .then((row) => mergeRow("pantry", row))
           .catch(fail);
         return id;

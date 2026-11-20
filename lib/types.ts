@@ -26,13 +26,29 @@ export interface PantryItem {
   expires_on: string | null;
   /** YYYY-MM-DD */
   opened_on: string | null;
+  /** The best-before / use-by printed on the pack (expires_on is what the warnings use). */
+  package_expires_on: string | null;
+  /** When it went into the freezer, and when it came out to defrost. */
+  frozen_on: string | null;
+  defrosted_on: string | null;
   added_by: string | null;
   updated_by: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export const PANTRY_FIELDS = ["name", "location", "category", "quantity", "unit", "expires_on", "opened_on"] as const;
+export const PANTRY_FIELDS = [
+  "name",
+  "location",
+  "category",
+  "quantity",
+  "unit",
+  "expires_on",
+  "opened_on",
+  "package_expires_on",
+  "frozen_on",
+  "defrosted_on",
+] as const;
 export type PantryPatch = Partial<Pick<PantryItem, (typeof PANTRY_FIELDS)[number]>>;
 
 export type Repeat = "none" | "weekly" | "monthly" | "yearly";

@@ -126,3 +126,41 @@ export function pantryCounts(items: PantryItem[], today: string, warnDays: numbe
   }
   return { expired, soon };
 }
+
+// ─── Freezing ───────────────────────────────────────────────────────────────
+
+/** A place counts as a freezer if it says so: "Freezer", "Garage freezer", "Chest freezer". */
+export const isFreezer = (location: string | null | undefined) => !!location && /freez/i.test(location);
+
+/**
+ * Roughly how long food keeps well once frozen, by category (UK food-safety guidance: frozen food
+ * stays safe, but quality drops after this). A suggestion only; the date can be changed.
+ */
+const FREEZER_MONTHS: Record<string, number> = {
+  "Meat & fish": 3,
+  Bakery: 3,
+  Leftovers: 3,
+  Dairy: 3,
+  "Fruit & veg": 8,
+  Frozen: 6,
+  Sauces: 3,
+  "Grains & pasta": 3,
+};
+export const freezerMonths = (category: string | null | undefined) => FREEZER_MONTHS[category ?? ""] ?? 3;
+
+/** "Frozen 12 Nov", "Defrosted today" for the list. */
+export function freezeLabel(item: Pick<PantryItem, "frozen_on" | "defrosted_on">, today: string) {
+  const short = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+  if (item.defrosted_on) {
+    const ago = daysBetween(item.defrosted_on, today);
+    return ago <= 0 ? "Defrosted today" : ago === 1 ? "Defrosted yesterday" : `Defrosted ${short(item.defrosted_on)}`;
+  }
+  return item.frozen_on ? `Frozen ${short(item.frozen_on)}` : null;
+}
+
+/** "Pack 15 Nov" when the pack's date differs from the one the warnings use. */
+export function packLabel(item: Pick<PantryItem, "package_expires_on" | "expires_on">) {
+  if (!item.package_expires_on || item.package_expires_on === item.expires_on) return null;
+  const d = new Date(`${item.package_expires_on}T00:00:00Z`);
+  return `Pack ${d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}`;
+}
